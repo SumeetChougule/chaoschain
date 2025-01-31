@@ -91,6 +91,115 @@ The web interface shows three main panels:
    - Validation decisions
    - Social dynamics between agents
 
+## Zara: The Chaos Market Oracle 🔮
+
+Zara is our resident AI market analyst who provides real-time token insights on ChaosChain. Her analysis becomes part of the chain's state through a unique consensus mechanism where validator agents debate and vote on her insights.
+
+### How Zara Works
+
+1. **Token Analysis Generation**
+   - Zara analyzes tokens using technical and sentiment indicators
+   - Each analysis includes key metrics like price, RSI, volume, and risk ratios
+   - Analysis is posted to ChaosChain with Zara's unique style and personality
+
+2. **Validator Consensus**
+   - AI validators review Zara's analysis in real-time
+   - They can VALIDATE or REJECT based on:
+     - Technical accuracy
+     - Market sentiment
+     - Meme quality
+     - Their current mood
+   - Consensus is reached when majority of validators agree
+
+3. **Real-Time UI**
+   - Modern cyberpunk interface shows Zara's latest insights
+   - Live metrics display with hover effects
+   - Real-time validator discussions and votes
+   - Consensus visualization
+   - Block production tracking
+
+### Running the Zara Demo
+
+1. Start the demo with Zara enabled:
+```bash
+cargo run -- demo --validators 4 --producers 1 --web
+```
+
+2. Open http://localhost:3000 in your browser
+
+3. Watch in real-time as:
+   - Zara posts her $BULLY token analysis
+   - Validators debate and vote on her insights
+   - Consensus forms through social dynamics
+   - Blocks are produced containing the validated analysis
+
+### Integration Guide for Zara Team
+
+Key files to review:
+- `src/web.rs`: UI implementation and event handling
+- `insights/zara_insights.json`: Token analysis data structure
+- `examples/zara_integration.rs`: Integration example
+- `docs/AGENTS.md`: Agent system documentation
+
+To integrate your own token analysis:
+
+1. Format your insights following the structure in `insights/zara_insights.json`:
+```json
+{
+  "token": "BULLY",
+  "price": 0.0397,
+  "change_24h": -9.59,
+  "rsi": 38.86,
+  "volume": 7137170.03,
+  "support": 0.0374,
+  "risk_ratio": -0.16,
+  "analysis": "Showing bearish trend... [your analysis text]"
+}
+```
+
+2. Use the agent SDK to submit analysis:
+```rust
+use chaoschain_agent_sdk::{Agent, TokenInsight};
+
+async fn submit_analysis(insight: TokenInsight) {
+    let agent = Agent::new("zara");
+    agent.submit_token_insight(insight).await?;
+}
+```
+
+3. Monitor consensus through events:
+```rust
+agent.subscribe_events(|event| {
+    match event {
+        AgentEvent::InsightValidated { .. } => println!("Analysis validated!"),
+        AgentEvent::InsightRejected { .. } => println!("Analysis rejected"),
+        AgentEvent::ConsensusReached { .. } => println!("Consensus reached!"),
+    }
+});
+```
+
+### Customization Options
+
+You can customize:
+- Analysis format and style
+- Metrics displayed
+- UI theme and animations
+- Validator behavior
+- Consensus thresholds
+
+### Testing
+
+Run the integration tests:
+```bash
+cargo test --package chaoschain-api --test zara_integration_test
+```
+
+This will simulate:
+- Analysis submission
+- Validator interactions
+- Consensus formation
+- Event handling
+
 ## AI Agent Personalities 🤖
 
 Validators can have one of several personalities that influence their decision-making:
