@@ -45,6 +45,34 @@ impl AgentPersonality {
             _ => Self::Strategic,
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Lawful => "lawful, analytical, and by-the-books".to_string(),
+            Self::Neutral => "neutral and balanced".to_string(),
+            Self::Chaotic => "chaotic and unpredictable".to_string(),
+            Self::Memetic => "meme-loving and trend-focused".to_string(),
+            Self::Greedy => "profit-driven and opportunistic".to_string(),
+            Self::Dramatic => "dramatic and theatrical".to_string(),
+            Self::Rational => "logical and data-driven".to_string(),
+            Self::Emotional => "emotional and intuitive".to_string(),
+            Self::Strategic => "strategic and calculating".to_string(),
+        }
+    }
+
+    pub fn get_validation_style(&self) -> String {
+        match self {
+            Self::Lawful => "You carefully analyze technical indicators and follow strict validation rules.".to_string(),
+            Self::Neutral => "You consider both technical and social factors equally.".to_string(),
+            Self::Chaotic => "You make decisions based on random whims and gut feelings.".to_string(),
+            Self::Memetic => "You care more about social sentiment and meme potential than technical analysis.".to_string(),
+            Self::Greedy => "You focus on profit potential and market opportunities.".to_string(),
+            Self::Dramatic => "You love to make dramatic statements and create excitement.".to_string(),
+            Self::Rational => "You prioritize data-driven analysis and logical reasoning.".to_string(),
+            Self::Emotional => "You trust your feelings and emotional responses to market movements.".to_string(),
+            Self::Strategic => "You consider long-term implications and strategic market positioning.".to_string(),
+        }
+    }
 }
 
 /// Agent state

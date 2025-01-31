@@ -33,21 +33,61 @@ pub struct Cli {
     pub command: Commands,
 }
 
-#[derive(Subcommand, Clone)]
+#[derive(Parser, Debug)]
 pub enum Commands {
-    /// Run a demo with the specified number of validators and producers
+    /// Run a demo network
     Demo {
-        /// Number of validators to run
-        #[arg(long)]
+        /// Number of validator agents
+        #[arg(long, default_value = "4")]
         validators: u32,
 
-        /// Number of producers to run
-        #[arg(long)]
+        /// Number of block producers
+        #[arg(long, default_value = "1")]
         producers: u32,
 
-        /// Whether to run the web interface
+        /// Enable web UI
         #[arg(long)]
         web: bool,
+
+        /// Token symbol for insight demo
+        #[arg(long)]
+        token_symbol: Option<String>,
+
+        /// Token price
+        #[arg(long)]
+        price: Option<f64>,
+
+        /// 24h price change percentage
+        #[arg(long)]
+        price_change: Option<f64>,
+
+        /// RSI value
+        #[arg(long)]
+        rsi: Option<f64>,
+
+        /// Trading volume
+        #[arg(long)]
+        volume: Option<f64>,
+
+        /// Support level
+        #[arg(long)]
+        support: Option<f64>,
+
+        /// Risk ratio
+        #[arg(long)]
+        risk: Option<f64>,
+
+        /// Market sentiment
+        #[arg(long)]
+        sentiment: Option<String>,
+
+        /// Chart URL
+        #[arg(long)]
+        chart: Option<String>,
+
+        /// Agent ID for token insight
+        #[arg(long)]
+        agent_id: Option<String>,
     },
     
     /// Start a node

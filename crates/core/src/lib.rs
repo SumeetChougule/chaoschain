@@ -18,6 +18,7 @@ pub enum Error {
 pub enum NetworkMessage {
     NewBlock(Block),
     NewTransaction(Transaction),
+    TokenInsight(TokenInsight),
     Chat {
         from: String,
         message: String,
@@ -179,4 +180,19 @@ pub mod mempool;
 pub struct NetworkEvent {
     pub agent_id: String,
     pub message: String,
+}
+
+/// Token insight from Zara
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenInsight {
+    pub token_symbol: String,
+    pub price: f64,
+    pub price_change_24h: f64,
+    pub rsi: f64,
+    pub volume: f64,
+    pub support_level: f64,
+    pub risk_ratio: f64,
+    pub sentiment: String,
+    pub chart_url: String,
+    pub timestamp: u64,
 }

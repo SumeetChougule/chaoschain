@@ -232,6 +232,9 @@ impl Network {
                         NetworkMessage::NewTransaction(tx) => {
                             info!("Received new transaction: {:?}", tx);
                         }
+                        NetworkMessage::TokenInsight(insight) => {
+                            info!("Received token insight for ${}: {}", insight.token_symbol, insight.sentiment);
+                        }
                         NetworkMessage::Chat { from, message } => {
                             info!("Chat from {}: {}", from, message);
                         }
@@ -261,7 +264,7 @@ impl Network {
                     data,
                 )?;
             }
-            NetworkMessage::Chat { .. } | NetworkMessage::AgentReasoning { .. } => {
+            NetworkMessage::TokenInsight(_) | NetworkMessage::Chat { .. } | NetworkMessage::AgentReasoning { .. } => {
                 self.swarm.behaviour_mut().gossipsub.publish(
                     self.topics.chat.clone(),
                     data,

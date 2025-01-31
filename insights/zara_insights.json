@@ -1,0 +1,16 @@
+{
+    "insights": [
+        {
+            "token_symbol": "BULLY",
+            "price": 0.0397,
+            "price_change_24h": -9.59,
+            "rsi": 38.86,
+            "volume": 7137170.03,
+            "support_level": 0.0374,
+            "risk_ratio": -0.16,
+            "sentiment": "bearish",
+            "chart_url": "chart.png",
+            "timestamp": 1710144000
+        }
+    ]
+} 

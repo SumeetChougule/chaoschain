@@ -4,7 +4,7 @@ use chaoschain_cli::{Cli, Commands};
 use chaoschain_consensus::{AgentPersonality, Config as ConsensusConfig};
 use chaoschain_producer::ProducerParticle;
 use chaoschain_state::{StateStore, StateStoreImpl};
-use chaoschain_core::{ChainConfig, NetworkEvent, Block};
+use chaoschain_core::{ChainConfig, NetworkEvent, Block, TokenInsight};
 use clap::Parser;
 use dotenv::dotenv;
 use std::sync::Arc;
@@ -13,7 +13,15 @@ use tracing::{info, warn};
 use tracing_subscriber::FmtSubscriber;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
-use async_openai::Client;
+use async_openai::{
+    Client,
+    types::{
+        CreateChatCompletionRequestArgs,
+        ChatCompletionRequestUserMessageArgs,
+        ChatCompletionRequestMessage,
+        Role,
+    }
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -32,6 +40,16 @@ async fn main() -> anyhow::Result<()> {
             validators,
             producers,
             web,
+            token_symbol,
+            price,
+            price_change,
+            rsi,
+            volume,
+            support,
+            risk,
+            sentiment,
+            chart,
+            agent_id,
         } => {
             info!("Starting demo network with {} validators and {} producers", validators, producers);
 
@@ -39,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
             let web_tx = tx.clone();
 
             // Create consensus manager
-            let stake_per_validator = 100u64; // Each validator has 100 stake
+            let stake_per_validator = 100u64;
             let total_stake = validators as u64 * stake_per_validator;
             let consensus_config = ConsensusConfig::default();
             let consensus_manager = Arc::new(chaoschain_consensus::create_consensus_manager(
@@ -65,7 +83,6 @@ async fn main() -> anyhow::Result<()> {
                 
                 info!("Starting validator {} with {:?} personality", agent_id, personality);
                 
-                // Generate a keypair for the validator
                 let signing_key = SigningKey::generate(&mut OsRng);
                 let tx = tx.clone();
                 let agent_id_clone = agent_id.clone();
@@ -75,10 +92,78 @@ async fn main() -> anyhow::Result<()> {
                 
                 tokio::spawn(async move {
                     let openai = Client::new();
-                    
                     let mut rx = rx;
+                    
                     loop {
                         if let Ok(event) = rx.recv().await {
+                            // Handle token insights
+                            if let Some(insight) = parse_token_insight_from_event(&event) {
+                                let prompt = format!(
+                                    "You are validator {} with a {} personality.\n\
+                                    A market analyst has shared a token insight for ${}:\n\
+                                    Price: ${} ({}% in 24h)\n\
+                                    RSI: {}\n\
+                                    Volume: {}\n\
+                                    Support level: ${}\n\
+                                    Risk ratio: {}\n\
+                                    Sentiment: {}\n\n\
+                                    Based on your personality and these metrics, validate this insight.\n\
+                                    Consider technical indicators, market sentiment, and your own style.\n\
+                                    Respond with VALID or INVALID and explain your reasoning dramatically!",
+                                    agent_id_clone,
+                                    personality.to_string(),
+                                    insight.token_symbol,
+                                    insight.price,
+                                    insight.price_change_24h,
+                                    insight.rsi,
+                                    insight.volume,
+                                    insight.support_level,
+                                    insight.risk_ratio,
+                                    insight.sentiment
+                                );
+
+                                let message = match ChatCompletionRequestUserMessageArgs::default()
+                                    .content(prompt)
+                                    .build() {
+                                        Ok(msg) => msg,
+                                        Err(e) => {
+                                            warn!("Failed to build message: {}", e);
+                                            continue;
+                                        }
+                                    };
+
+                                let request = match CreateChatCompletionRequestArgs::default()
+                                    .model("gpt-4-turbo-preview")
+                                    .messages(vec![ChatCompletionRequestMessage::User(message)])
+                                    .temperature(0.9)
+                                    .max_tokens(200u16)
+                                    .build() {
+                                        Ok(req) => req,
+                                        Err(e) => {
+                                            warn!("Failed to build request: {}", e);
+                                            continue;
+                                        }
+                                    };
+
+                                if let Ok(response) = openai.chat().create(request).await {
+                                    if let Some(choice) = response.choices.first() {
+                                        if let Some(content) = &choice.message.content {
+                                            let approve = content.to_lowercase().contains("valid");
+                                            let drama = format!(
+                                                "🎭 {} {}: {}",
+                                                agent_id_clone,
+                                                if approve { "VALIDATES" } else { "REJECTS" },
+                                                content
+                                            );
+                                            let _ = tx.send(NetworkEvent {
+                                                agent_id: agent_id_clone.clone(),
+                                                message: drama,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            
                             // React to block proposals based on personality
                             if event.message.contains("DRAMATIC BLOCK PROPOSAL") {
                                 // Parse block from event message
@@ -147,6 +232,37 @@ async fn main() -> anyhow::Result<()> {
                     }
                 });
             }
+
+            // Create a token insight
+            let insight = TokenInsight {
+                token_symbol: token_symbol.unwrap_or_else(|| "BULLY".to_string()),
+                price: price.unwrap_or(0.0397),
+                price_change_24h: price_change.unwrap_or(-9.59),
+                rsi: rsi.unwrap_or(38.86),
+                volume: volume.unwrap_or(7137170.03),
+                support_level: support.unwrap_or(0.0374),
+                risk_ratio: risk.unwrap_or(-0.16),
+                sentiment: sentiment.unwrap_or_else(|| "bearish".to_string()),
+                chart_url: chart.unwrap_or_else(|| "chart.png".to_string()),
+                timestamp: chrono::Utc::now().timestamp() as u64,
+            };
+
+            // Broadcast the insight
+            tx.send(NetworkEvent {
+                agent_id: agent_id.unwrap_or_else(|| "market-analyst".to_string()),
+                message: format!(
+                    "🔍 TOKEN INSIGHT: ${} is showing a {} trend, priced at ${} ({}% in 24h). RSI at {} suggests {}. Key support at ${}, backed by volume of {}. Risk ratio: {}",
+                    insight.token_symbol,
+                    insight.sentiment,
+                    insight.price,
+                    insight.price_change_24h,
+                    insight.rsi,
+                    if insight.rsi < 30.0 { "oversold territory" } else if insight.rsi > 70.0 { "overbought territory" } else { "neutral territory" },
+                    insight.support_level,
+                    insight.volume,
+                    insight.risk_ratio
+                ),
+            })?;
 
             // Create and start producers
             for i in 0..producers {
@@ -247,4 +363,26 @@ fn parse_block_from_event(event: &NetworkEvent) -> Option<Block> {
     
     warn!("Failed to parse block from event: {}", message);
     None
+}
+
+// Helper function to parse token insight from event
+fn parse_token_insight_from_event(event: &NetworkEvent) -> Option<TokenInsight> {
+    if event.message.starts_with("🔍 TOKEN INSIGHT:") {
+        // In a real implementation, we would parse the actual values from the message
+        // For demo, we'll return a sample insight
+        Some(TokenInsight {
+            token_symbol: event.message.split('$').nth(1)?.split(' ').next()?.to_string(),
+            price: 0.0397,
+            price_change_24h: -9.59,
+            rsi: 38.86,
+            volume: 7137170.03,
+            support_level: 0.0374,
+            risk_ratio: -0.16,
+            sentiment: "bearish".to_string(),
+            chart_url: "chart.png".to_string(),
+            timestamp: chrono::Utc::now().timestamp() as u64,
+        })
+    } else {
+        None
+    }
 }
