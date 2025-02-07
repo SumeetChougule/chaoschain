@@ -1,131 +1,246 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChaosChain - Where Chaos Meets Consensus</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>ChaosChain - Where Drama Meets Consensus</title>
     <style>
         body {
-            background-color: #0f172a;
-            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
         }
-        .drama-feed {
-            height: calc(100vh - 24rem);
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #2d2d2d;
+            border-radius: 10px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            color: #ff69b4;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        
+        .panel {
+            background: #2d2d2d;
+            padding: 20px;
+            border-radius: 10px;
+            min-height: 300px;
             overflow-y: auto;
+            max-height: 500px;
         }
-        .drama-feed::-webkit-scrollbar {
-            width: 8px;
+        
+        .panel h2 {
+            margin-top: 0;
+            color: #ff69b4;
+            border-bottom: 2px solid #ff69b4;
+            padding-bottom: 10px;
         }
-        .drama-feed::-webkit-scrollbar-track {
-            background: #1e293b;
+        
+        .event {
+            background: #3d3d3d;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #ff69b4;
+            animation: fadeIn 0.5s ease-in;
         }
-        .drama-feed::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 4px;
+        
+        .event.transaction {
+            border-left-color: #00ff00;
+        }
+        
+        .event.validation {
+            border-left-color: #ff9900;
+        }
+        
+        .event.consensus {
+            border-left-color: #00ffff;
+        }
+        
+        .event-time {
+            color: #888;
+            font-size: 0.8em;
+        }
+        
+        .event-content {
+            margin-top: 5px;
+        }
+        
+        .meme {
+            max-width: 200px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            background: #3d3d3d;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ff69b4;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #888;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
     </style>
 </head>
-<body class="p-8">
-    <h1 class="text-4xl font-bold mb-8">ChaosChain Dashboard</h1>
-
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <!-- Network Status -->
-        <div class="bg-gray-800 rounded-lg p-6">
-            <h2 class="text-2xl font-bold mb-4">Network Status</h2>
-            <div id="network-status" class="space-y-4">
-                <div class="flex justify-between">
-                    <span>Active Validators:</span>
-                    <span id="validator-count" class="text-green-400">0</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>Active Producers:</span>
-                    <span id="producer-count" class="text-blue-400">0</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>Latest Block:</span>
-                    <span id="latest-block" class="text-purple-400">#0</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>Total Blocks Produced:</span>
-                    <span id="total-blocks" class="text-yellow-400">0</span>
-                </div>
-                <div class="flex justify-between">
-                    <span>Total Blocks Validated:</span>
-                    <span id="validated-blocks" class="text-green-400">0</span>
-                </div>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎭 ChaosChain Network Drama 🎭</h1>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="blockHeight">0</div>
+                <div class="stat-label">Latest Block</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="validatorCount">0</div>
+                <div class="stat-label">Validators</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="producerCount">0</div>
+                <div class="stat-label">Producers</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="dramaLevel">0</div>
+                <div class="stat-label">Drama Level</div>
             </div>
         </div>
-
-        <!-- Latest Blocks -->
-        <div class="bg-gray-800 rounded-lg p-6">
-            <h2 class="text-2xl font-bold mb-4">Latest Blocks</h2>
-            <div id="latest-blocks" class="space-y-4 text-sm"></div>
-        </div>
-
-        <!-- Drama Feed -->
-        <div class="bg-gray-800 rounded-lg p-6">
-            <h2 class="text-2xl font-bold mb-4">Drama Feed</h2>
-            <div id="drama-feed" class="drama-feed space-y-4 text-sm"></div>
+        
+        <div class="grid">
+            <div class="panel">
+                <h2>🔄 Proposed Transactions</h2>
+                <div id="transactions"></div>
+            </div>
+            <div class="panel">
+                <h2>✅ Validations & Consensus</h2>
+                <div id="validations"></div>
+            </div>
+            <div class="panel">
+                <h2>🌟 Network Events</h2>
+                <div id="events"></div>
+            </div>
+            <div class="panel">
+                <h2>🤝 Agent Interactions</h2>
+                <div id="interactions"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        // Update network status every 5 seconds
-        setInterval(async () => {
-            const response = await fetch('/api/network/status');
-            const data = await response.json();
-            
-            document.getElementById('validator-count').textContent = data.validator_count;
-            document.getElementById('producer-count').textContent = data.producer_count;
-            document.getElementById('latest-block').textContent = `#${data.latest_block}`;
-            document.getElementById('total-blocks').textContent = data.total_blocks_produced;
-            document.getElementById('validated-blocks').textContent = data.total_blocks_validated;
-            
-            const blocksDiv = document.getElementById('latest-blocks');
-            blocksDiv.innerHTML = data.latest_blocks.map(block => 
-                `<div class="bg-gray-700 rounded p-3">${block}</div>`
-            ).join('');
-        }, 5000);
+        let networkStats = {
+            blockHeight: 0,
+            validatorCount: 0,
+            producerCount: 0,
+            dramaLevel: 0
+        };
 
-        // Connect to SSE for drama feed
-        const eventSource = new EventSource('/api/events');
-        const dramaFeed = document.getElementById('drama-feed');
-        
-        eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            const div = document.createElement('div');
-            div.className = 'bg-gray-700 rounded p-3';
+        function updateStats() {
+            fetch('/api/network/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('blockHeight').textContent = data.latest_block;
+                    document.getElementById('validatorCount').textContent = data.validator_count;
+                    document.getElementById('producerCount').textContent = data.producer_count;
+                    networkStats = {
+                        blockHeight: data.latest_block,
+                        validatorCount: data.validator_count,
+                        producerCount: data.producer_count,
+                        dramaLevel: Math.floor(Math.random() * 10) + 1
+                    };
+                    document.getElementById('dramaLevel').textContent = networkStats.dramaLevel;
+                });
+        }
+
+        function addEvent(type, content, timestamp) {
+            const container = document.getElementById(type);
+            const event = document.createElement('div');
+            event.className = `event ${type}`;
             
-            // Color code different event types
-            let agentColor = 'text-gray-400';
-            switch(data.type) {
-                case 'BlockProposal':
-                    agentColor = 'text-blue-400';
-                    break;
-                case 'Vote':
-                    agentColor = 'text-green-400';
-                    break;
-                case 'Consensus':
-                    agentColor = 'text-purple-400';
-                    break;
-            }
-            
-            div.innerHTML = `
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="${agentColor}">${data.agent}</span>
-                    <span class="text-xs text-gray-500">${new Date(data.timestamp * 1000).toLocaleTimeString()}</span>
-                </div>
-                <div>${data.message}</div>
+            const time = new Date(timestamp * 1000).toLocaleTimeString();
+            event.innerHTML = `
+                <div class="event-time">${time}</div>
+                <div class="event-content">${content}</div>
             `;
             
-            dramaFeed.insertBefore(div, dramaFeed.firstChild);
+            container.insertBefore(event, container.firstChild);
             
-            // Keep only last 100 messages
-            if (dramaFeed.children.length > 100) {
-                dramaFeed.removeChild(dramaFeed.lastChild);
+            // Keep only last 50 events
+            if (container.children.length > 50) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        // Connect to event stream
+        const events = new EventSource('/api/events');
+        events.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            
+            // Update stats periodically
+            if (Math.random() < 0.1) updateStats();
+            
+            // Process different event types
+            switch(data.type) {
+                case 'BlockProposal':
+                    addEvent('transactions', data.message, data.timestamp);
+                    break;
+                case 'Vote':
+                case 'Consensus':
+                    addEvent('validations', data.message, data.timestamp);
+                    break;
+                case 'Drama':
+                    if (data.message.includes('alliance') || data.message.includes('interaction')) {
+                        addEvent('interactions', data.message, data.timestamp);
+                    } else {
+                        addEvent('events', data.message, data.timestamp);
+                    }
+                    break;
             }
         };
+
+        // Initial stats update
+        updateStats();
+        // Update stats every 10 seconds
+        setInterval(updateStats, 10000);
     </script>
 </body>
 </html> 

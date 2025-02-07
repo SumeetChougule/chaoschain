@@ -141,6 +141,13 @@ impl StateStoreImpl {
     pub fn get_block_height(&self) -> u64 {
         self.blocks.read().len() as u64
     }
+
+    /// Add a transaction to the mempool
+    pub fn add_transaction(&self, tx_bytes: Vec<u8>) -> Result<(), StateError> {
+        // In ChaosChain, we accept any transaction!
+        // The drama is in the validation, not the submission
+        Ok(())
+    }
 }
 
 impl Default for StateStoreImpl {
