@@ -5,95 +5,76 @@ use crate::{Vote, Error};
 use chaoschain_core::Block;
 use tracing::{info, warn};
 
+pub struct ConsensusState {
+    pub threshold: u64,
+    pub total_stake: u64,
+    pub votes: HashMap<[u8; 32], (Vote, u64)>, // block_hash -> (vote, stake)
+    pub current_block: Option<Block>,
+}
+
 /// Tracks votes and manages consensus formation
 pub struct ConsensusManager {
-    /// Current block being voted on
-    current_block: RwLock<Option<Block>>,
-    /// Votes for the current block
-    votes: RwLock<HashMap<String, Vote>>,
-    /// Total stake in the system
-    total_stake: u64,
-    /// Required stake percentage for consensus (e.g. 0.67 for 2/3)
-    finality_threshold: f64,
+    state: RwLock<ConsensusState>,
 }
 
 impl ConsensusManager {
     pub fn new(total_stake: u64, finality_threshold: f64) -> Self {
+        let threshold = (total_stake as f64 * finality_threshold) as u64;
         Self {
-            current_block: RwLock::new(None),
-            votes: RwLock::new(HashMap::new()),
-            total_stake,
-            finality_threshold,
+            state: RwLock::new(ConsensusState {
+                threshold,
+                total_stake,
+                votes: HashMap::new(),
+                current_block: None,
+            }),
         }
+    }
+
+    /// Update the consensus threshold
+    pub async fn update_consensus_threshold(&self, threshold: u64) {
+        let mut state = self.state.write().await;
+        state.threshold = threshold;
     }
 
     /// Start voting round for a new block
     pub async fn start_voting_round(&self, block: Block) {
         info!("Starting voting round for block {}", block.height);
-        let mut current = self.current_block.write().await;
-        *current = Some(block);
-        self.votes.write().await.clear();
+        let mut state = self.state.write().await;
+        state.current_block = Some(block);
+        state.votes.clear();
     }
 
     /// Add a vote from a validator
     pub async fn add_vote(&self, vote: Vote, stake: u64) -> Result<bool, Error> {
-        let current = self.current_block.read().await;
+        let mut state = self.state.write().await;
         
-        // Ensure we're voting on the current block
-        if let Some(block) = &*current {
-            if vote.block_hash != block.hash() {
-                warn!("Vote for wrong block hash: expected {:?}, got {:?}", block.hash(), vote.block_hash);
-                return Err(Error::Internal("Vote for wrong block".to_string()));
-            }
-        } else {
-            return Err(Error::Internal("No active voting round".to_string()));
+        // Check if we have enough stake
+        if stake == 0 {
+            return Err(Error::InsufficientStake);
         }
 
-        // Add the vote
-        let mut votes = self.votes.write().await;
-        votes.insert(vote.agent_id.clone(), vote);
+        // Add vote
+        state.votes.insert(vote.block_hash, (vote, stake));
 
-        // Check if we have consensus
-        let result = self.check_consensus(&votes, stake).await;
-        if let Ok(true) = result {
-            info!("Consensus reached for block {}", current.as_ref().unwrap().height);
-        }
-        result
-    }
+        // Calculate total approving stake
+        let approving_stake: u64 = state.votes.values()
+            .filter(|(vote, _)| vote.approve)
+            .map(|(_, stake)| stake)
+            .sum();
 
-    /// Check if we have reached consensus
-    async fn check_consensus(&self, votes: &HashMap<String, Vote>, stake_per_validator: u64) -> Result<bool, Error> {
-        let mut approve_stake = 0u64;
-        let mut reject_stake = 0u64;
-
-        // Sum up stake for approvals and rejections
-        for vote in votes.values() {
-            if vote.approve {
-                approve_stake = approve_stake.saturating_add(stake_per_validator);
-            } else {
-                reject_stake = reject_stake.saturating_add(stake_per_validator);
-            }
-        }
-
-        // Check if we have enough stake for consensus
-        let threshold_stake = (self.total_stake as f64 * self.finality_threshold) as u64;
-        
-        if approve_stake >= threshold_stake {
-            Ok(true)
-        } else if reject_stake >= threshold_stake {
-            Ok(false)
-        } else {
-            Err(Error::InsufficientStake)
-        }
+        // Check if we've reached consensus
+        Ok(approving_stake >= state.threshold)
     }
 
     /// Get all current votes
-    pub async fn get_votes(&self) -> HashMap<String, Vote> {
-        self.votes.read().await.clone()
+    pub async fn get_votes(&self) -> HashMap<[u8; 32], (Vote, u64)> {
+        let state = self.state.read().await;
+        state.votes.clone()
     }
 
     /// Get current block being voted on
     pub async fn get_current_block(&self) -> Option<Block> {
-        self.current_block.read().await.clone()
+        let state = self.state.read().await;
+        state.current_block.clone()
     }
 } 

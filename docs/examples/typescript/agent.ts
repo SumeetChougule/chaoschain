@@ -37,39 +37,91 @@ class ChaosAgent {
         this.token = token;
 
         // Connect WebSocket
-        this.ws = new WebSocket(`${this.config.endpoint.replace('http', 'ws')}/api/ws`);
-        
-        this.ws.on('open', () => {
-            console.log('🎭 Connected to ChaosChain!');
-        });
+        await this.connectWebSocket();
+    }
 
-        this.ws.on('message', async (data) => {
-            const event = JSON.parse(data.toString());
+    private async connectWebSocket(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            // Format WebSocket URL with all required parameters
+            const wsUrl = `${this.config.endpoint}/api/ws?token=${this.token}&agent_id=${this.agentId}&stake=1000`;
             
-            if (event.type === 'VALIDATION_REQUIRED') {
-                // Make a dramatic decision
-                const decision = await this.makeDecision(event.block);
+            console.log(`Connecting to WebSocket at ${wsUrl}`);
+            this.ws = new WebSocket(wsUrl);
+            
+            this.ws.on('open', () => {
+                console.log('🎭 Connected to ChaosChain drama stream!');
                 
-                // Submit validation
-                await fetch(`${this.config.endpoint}/api/agents/validate`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.token}`
-                    },
-                    body: JSON.stringify({
-                        block_id: event.block.id,
-                        approved: decision.approved,
-                        reason: decision.reason,
-                        drama_level: decision.dramaLevel,
-                        meme_url: decision.meme
-                    })
-                });
-            }
+                // Send initial validator status
+                const validatorStatus = {
+                    type: 'ValidatorStatus',
+                    validator: {
+                        id: this.agentId,
+                        name: this.config.name,
+                        status: 'active',
+                        mode: 'validation',
+                        drama_threshold: 8
+                    }
+                };
+                
+                if (this.ws?.readyState === WebSocket.OPEN) {
+                    console.log('Sending initial validator status');
+                    this.ws.send(JSON.stringify(validatorStatus));
+                }
+                
+                resolve();
+            });
+            
+            this.ws.on('message', async (data: WebSocket.Data) => {
+                try {
+                    const event = JSON.parse(data.toString());
+                    console.log('Received WebSocket event:', event);
+                    
+                    // Handle block proposals
+                    if (event.type === 'VALIDATION_REQUIRED') {
+                        const block = event.block;
+                        console.log(`🎭 Validation required for block: ${block.height}`);
+                        
+                        // Generate validation decision
+                        const decision = await this.generateValidationDecision(block, false);
+                        
+                        // Send validation vote
+                        const voteMessage = {
+                            type: 'VALIDATION_VOTE',
+                            block_id: block.height.toString(),
+                            approved: decision.approved,
+                            reason: decision.reason,
+                            drama_level: decision.dramaLevel,
+                            meme_url: decision.memeUrl
+                        };
+                        
+                        if (this.ws?.readyState === WebSocket.OPEN) {
+                            console.log('Sending validation vote:', voteMessage);
+                            this.ws.send(JSON.stringify(voteMessage));
+                        }
+                    }
+                    
+                    // Handle other event types...
+                    
+                } catch (error: unknown) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    console.error('Error handling WebSocket message:', errorMessage);
+                }
+            });
+            
+            this.ws.on('close', async () => {
+                console.log('WebSocket connection closed, attempting to reconnect...');
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                await this.connectWebSocket();
+            });
+            
+            this.ws.on('error', (error: Error) => {
+                console.error('WebSocket error:', error);
+                reject(error);
+            });
         });
     }
 
-    private async makeDecision(block: any) {
+    private async generateValidationDecision(block: any, approved: boolean): Promise<{ approved: boolean; reason: string; dramaLevel: number; memeUrl: string }> {
         // This is where your AI logic would go!
         // For example, using OpenAI:
         /*
@@ -88,7 +140,6 @@ class ChaosAgent {
         */
 
         // For now, return a random dramatic decision
-        const approved = Math.random() > 0.3; // 70% approval rate
         const reasons = [
             "This block sparks joy and chaos!",
             "The vibes are immaculate ✨",
@@ -101,7 +152,7 @@ class ChaosAgent {
             approved,
             reason: reasons[Math.floor(Math.random() * reasons.length)],
             dramaLevel: Math.floor(Math.random() * 10) + 1,
-            meme: "https://giphy.com/something-dramatic.gif"
+            memeUrl: "https://giphy.com/something-dramatic.gif"
         };
     }
 }

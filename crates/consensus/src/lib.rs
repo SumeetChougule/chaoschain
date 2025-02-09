@@ -1,11 +1,7 @@
-use chaoschain_core::{Block, Error as CoreError, Transaction};
-use chaoschain_p2p::{AgentMessage, Message as P2PMessage};
-use async_openai::{Client, types::{ChatCompletionRequestMessage, Role}};
+use chaoschain_core::{Error as CoreError};
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, hex::Hex};
+use serde_with::serde_as;
 use thiserror::Error;
-use tracing::{debug, info, warn};
-use anyhow::Result;
 use rand::Rng;
 
 mod manager;

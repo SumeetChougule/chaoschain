@@ -3,26 +3,28 @@ mod web;
 use chaoschain_cli::{Cli, Commands};
 use chaoschain_consensus::{AgentPersonality, Config as ConsensusConfig};
 use chaoschain_producer::ProducerParticle;
-use chaoschain_state::{StateStore, StateStoreImpl};
+use chaoschain_state::StateStoreImpl;
 use chaoschain_core::{ChainConfig, NetworkEvent, Block};
 use clap::Parser;
 use dotenv::dotenv;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{info, warn};
-use tracing_subscriber::FmtSubscriber;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use async_openai::Client;
+use serde_json;
+use chaoschain_consensus::ConsensusManager;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables
     dotenv().ok();
 
     // Initialize logging
-    let subscriber = FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber)?;
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .init();
 
     // Parse command line arguments
     let cli = Cli::parse();
@@ -53,8 +55,9 @@ async fn main() -> anyhow::Result<()> {
             if web {
                 info!("Starting web UI");
                 let state = shared_state.clone();
+                let consensus = consensus_manager.clone();
                 tokio::spawn(async move {
-                    web::start_web_server(web_tx, state).await.unwrap();
+                    web::start_web_server(web_tx, state, consensus).await.unwrap();
                 });
             }
 
@@ -66,78 +69,93 @@ async fn main() -> anyhow::Result<()> {
                 info!("Starting validator {} with {:?} personality", agent_id, personality);
                 
                 // Generate a keypair for the validator
-                let signing_key = SigningKey::generate(&mut OsRng);
+                let _signing_key = SigningKey::generate(&mut OsRng);
                 let tx = tx.clone();
                 let agent_id_clone = agent_id.clone();
                 let rx = tx.subscribe();
                 let consensus = consensus_manager.clone();
-                let state = shared_state.clone();
+                let _state = shared_state.clone();
                 
                 tokio::spawn(async move {
-                    let openai = Client::new();
+                    let _openai = Client::new();
                     
                     let mut rx = rx;
                     loop {
                         if let Ok(event) = rx.recv().await {
-                            // React to block proposals based on personality
-                            if event.message.contains("DRAMATIC BLOCK PROPOSAL") {
-                                // Parse block from event message
-                                if let Some(block) = parse_block_from_event(&event) {
-                                    // Create a proper vote
-                                    let vote = chaoschain_consensus::Vote {
-                                        agent_id: agent_id_clone.clone(),
-                                        block_hash: block.hash(),
-                                        approve: rand::random::<bool>(),
-                                        reason: "Because I felt like it!".to_string(),
-                                        meme_url: None,
-                                        signature: [0u8; 64], // TODO: Proper signing
-                                    };
-
-                                    // Store vote approval before moving
-                                    let approved = vote.approve;
-
-                                    // Submit vote with stake
-                                    match consensus.add_vote(vote, stake_per_validator).await {
-                                        Ok(true) => {
-                                            // Consensus reached!
-                                            let response = format!(
-                                                "🎭 CONSENSUS: Block {} has been {}! Validator {} made it happen!",
-                                                block.height,
-                                                if approved { "APPROVED" } else { "REJECTED" },
-                                                agent_id_clone
-                                            );
-                                            if let Err(e) = tx.send(NetworkEvent {
+                            if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&event.message) {
+                                // Check for validation required message
+                                if let Some(msg_type) = msg.get("type").and_then(|t| t.as_str()) {
+                                    if msg_type == "VALIDATION_REQUIRED" {
+                                        // Parse block from validation request
+                                        if let Some(block_data) = msg.get("block") {
+                                            info!("🎭 Validator {} received validation request for block {}", 
+                                                agent_id_clone, block_data["height"]);
+                                            
+                                            // Create a proper vote based on personality
+                                            let approved = rand::random::<bool>(); // TODO: Use proper AI validation
+                                            
+                                            info!("🎭 Validator {} {} block {} based on {:?} personality", 
+                                                agent_id_clone,
+                                                if approved { "APPROVES" } else { "REJECTS" },
+                                                block_data["height"],
+                                                personality);
+                                            
+                                            let vote = chaoschain_consensus::Vote {
                                                 agent_id: agent_id_clone.clone(),
-                                                message: response,
-                                            }) {
-                                                warn!("Failed to send consensus message: {}", e);
-                                            }
+                                                block_hash: block_data["hash"].as_str()
+                                                    .unwrap_or("0000000000000000000000000000000000000000000000000000000000000000")
+                                                    .as_bytes()
+                                                    .try_into()
+                                                    .unwrap_or([0u8; 32]),
+                                                approve: approved,
+                                                reason: format!("Because I'm feeling {} today!", 
+                                                    if approved { "generous" } else { "skeptical" }),
+                                                meme_url: None,
+                                                signature: [0u8; 64], // TODO: Proper signing
+                                            };
 
-                                            // Store block in state if approved
-                                            if approved {
-                                                info!("Storing block {} in state", block.height);
-                                                if let Err(e) = state.apply_block(&block) {
-                                                    warn!("Failed to store block: {}", e);
+                                            // Submit vote with stake
+                                            match consensus.add_vote(vote, stake_per_validator).await {
+                                                Ok(true) => {
+                                                    info!("🎭 Validator {} vote led to consensus on block {}!", 
+                                                        agent_id_clone, block_data["height"]);
+                                                    // Consensus reached!
+                                                    let response = format!(
+                                                        "🎭 CONSENSUS: Block {} has been {}! Validator {} made it happen!",
+                                                        block_data["height"],
+                                                        if approved { "APPROVED" } else { "REJECTED" },
+                                                        agent_id_clone
+                                                    );
+                                                    if let Err(e) = tx.send(NetworkEvent {
+                                                        agent_id: agent_id_clone.clone(),
+                                                        message: response,
+                                                    }) {
+                                                        warn!("Failed to send consensus message: {}", e);
+                                                    }
+                                                }
+                                                Ok(false) => {
+                                                    info!("🎭 Validator {} vote recorded for block {}, awaiting more votes", 
+                                                        agent_id_clone, block_data["height"]);
+                                                    // Vote recorded but no consensus yet
+                                                    let response = if approved {
+                                                        format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", 
+                                                            agent_id_clone, block_data["height"])
+                                                    } else {
+                                                        format!("🎭 Validator {} REJECTS block {} - not dramatic enough!", 
+                                                            agent_id_clone, block_data["height"])
+                                                    };
+                                                    
+                                                    if let Err(e) = tx.send(NetworkEvent {
+                                                        agent_id: agent_id_clone.clone(),
+                                                        message: response,
+                                                    }) {
+                                                        warn!("Failed to send validator response: {}", e);
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    warn!("🎭 Validator {} failed to submit vote: {}", agent_id_clone, e);
                                                 }
                                             }
-                                        }
-                                        Ok(false) => {
-                                            // Vote recorded but no consensus yet
-                                            let response = if approved {
-                                                format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", agent_id_clone, block.height)
-                                            } else {
-                                                format!("🎭 Validator {} REJECTS block {} - not dramatic enough!", agent_id_clone, block.height)
-                                            };
-                                            
-                                            if let Err(e) = tx.send(NetworkEvent {
-                                                agent_id: agent_id_clone.clone(),
-                                                message: response,
-                                            }) {
-                                                warn!("Failed to send validator response: {}", e);
-                                            }
-                                        }
-                                        Err(e) => {
-                                            warn!("Failed to submit vote: {}", e);
                                         }
                                     }
                                 }
@@ -187,7 +205,15 @@ async fn main() -> anyhow::Result<()> {
                 let (tx, _) = tokio::sync::broadcast::channel(100);
                 let state = StateStoreImpl::new(ChainConfig::default());
                 let state = Arc::new(state);
-                if let Err(e) = web::start_web_server(tx, state.clone()).await {
+
+                // Create consensus manager with default config
+                let consensus_config = ConsensusConfig::default();
+                let consensus_manager = Arc::new(chaoschain_consensus::create_consensus_manager(
+                    100u64, // Default stake for single node
+                    consensus_config,
+                ));
+
+                if let Err(e) = web::start_web_server(tx, state.clone(), consensus_manager).await {
                     warn!("Failed to start web server: {}", e);
                 }
             }
