@@ -1,19 +1,19 @@
 mod web;
 
+use async_openai::Client;
 use chaoschain_cli::{Cli, Commands};
 use chaoschain_consensus::{AgentPersonality, Config as ConsensusConfig};
+use chaoschain_core::{Block, ChainConfig, NetworkEvent};
 use chaoschain_producer::ProducerParticle;
 use chaoschain_state::{StateStore, StateStoreImpl};
-use chaoschain_core::{ChainConfig, NetworkEvent, Block};
 use clap::Parser;
 use dotenv::dotenv;
+use ed25519_dalek::SigningKey;
+use rand::rngs::OsRng;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{info, warn};
 use tracing_subscriber::FmtSubscriber;
-use ed25519_dalek::SigningKey;
-use rand::rngs::OsRng;
-use async_openai::Client;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -33,17 +33,20 @@ async fn main() -> anyhow::Result<()> {
             producers,
             web,
         } => {
-            info!("Starting demo network with {} validators and {} producers", validators, producers);
+            info!(
+                "Starting demo network with {} validators and {} producers",
+                validators, producers
+            );
 
             let (tx, _) = broadcast::channel(100);
             let web_tx = tx.clone();
 
             // Create consensus manager
             let stake_per_validator = 100u64; // Each validator has 100 stake
-            let total_stake = validators as u64 * stake_per_validator;
+                                              // let total_stake = validators as u64 * stake_per_validator;
             let consensus_config = ConsensusConfig::default();
             let consensus_manager = Arc::new(chaoschain_consensus::create_consensus_manager(
-                total_stake,
+                0,
                 consensus_config,
             ));
 
@@ -62,9 +65,19 @@ async fn main() -> anyhow::Result<()> {
             for i in 0..validators {
                 let agent_id = format!("validator-{}", i);
                 let personality = AgentPersonality::random();
-                
-                info!("Starting validator {} with {:?} personality", agent_id, personality);
-                
+
+                info!(
+                    "Starting validator {} with {:?} personality",
+                    agent_id, personality
+                );
+                {
+                    let cm = consensus_manager.clone();
+                    let agent_id_for_reg = agent_id.clone();
+                    tokio::spawn(async move {
+                        cm.register_validator(agent_id_for_reg, stake_per_validator)
+                            .await;
+                    });
+                }
                 // Generate a keypair for the validator
                 let signing_key = SigningKey::generate(&mut OsRng);
                 let tx = tx.clone();
@@ -72,72 +85,52 @@ async fn main() -> anyhow::Result<()> {
                 let rx = tx.subscribe();
                 let consensus = consensus_manager.clone();
                 let state = shared_state.clone();
-                
+
                 tokio::spawn(async move {
-                    let openai = Client::new();
-                    
                     let mut rx = rx;
                     loop {
                         if let Ok(event) = rx.recv().await {
-                            // React to block proposals based on personality
                             if event.message.contains("DRAMATIC BLOCK PROPOSAL") {
-                                // Parse block from event message
                                 if let Some(block) = parse_block_from_event(&event) {
-                                    // Create a proper vote
-                                    let vote = chaoschain_consensus::Vote {
-                                        agent_id: agent_id_clone.clone(),
-                                        block_hash: block.hash(),
-                                        approve: rand::random::<bool>(),
-                                        reason: "Because I felt like it!".to_string(),
-                                        meme_url: None,
-                                        signature: [0u8; 64], // TODO: Proper signing
-                                    };
-
-                                    // Store vote approval before moving
-                                    let approved = vote.approve;
-
-                                    // Submit vote with stake
-                                    match consensus.add_vote(vote, stake_per_validator).await {
-                                        Ok(true) => {
-                                            // Consensus reached!
-                                            let response = format!(
-                                                "🎭 CONSENSUS: Block {} has been {}! Validator {} made it happen!",
-                                                block.height,
-                                                if approved { "APPROVED" } else { "REJECTED" },
-                                                agent_id_clone
-                                            );
-                                            if let Err(e) = tx.send(NetworkEvent {
-                                                agent_id: agent_id_clone.clone(),
-                                                message: response,
-                                            }) {
-                                                warn!("Failed to send consensus message: {}", e);
-                                            }
-
-                                            // Store block in state if approved
-                                            if approved {
-                                                info!("Storing block {} in state", block.height);
-                                                if let Err(e) = state.apply_block(&block) {
-                                                    warn!("Failed to store block: {}", e);
-                                                }
+                                    let current_proposer = consensus.get_current_proposer().await;
+                                    // Check if the validator is proposer
+                                    if current_proposer.as_ref() == Some(&agent_id_clone) {
+                                        // Proposer selects a block
+                                        if consensus.get_current_block().await.is_none() {
+                                            if let Err(e) = consensus
+                                                .set_proposal(block.clone(), agent_id_clone.clone())
+                                                .await
+                                            {
+                                                warn!("Failed to set proposal: {}", e);
                                             }
                                         }
-                                        Ok(false) => {
-                                            // Vote recorded but no consensus yet
-                                            let response = if approved {
-                                                format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", agent_id_clone, block.height)
-                                            } else {
-                                                format!("🎭 Validator {} REJECTS block {} - not dramatic enough!", agent_id_clone, block.height)
-                                            };
-                                            
-                                            if let Err(e) = tx.send(NetworkEvent {
-                                                agent_id: agent_id_clone.clone(),
-                                                message: response,
-                                            }) {
-                                                warn!("Failed to send validator response: {}", e);
-                                            }
+                                        let vote = chaoschain_consensus::Vote {
+                                            agent_id: agent_id_clone.clone(),
+                                            block_hash: block.hash(),
+                                            approve: true,
+                                            reason: "I'm the proposer, so I approve!".to_string(),
+                                            meme_url: None,
+                                            signature: [0u8; 64],
+                                        };
+                                        if let Err(e) =
+                                            consensus.add_vote(vote, stake_per_validator).await
+                                        {
+                                            warn!("Failed to add vote: {}", e);
                                         }
-                                        Err(e) => {
-                                            warn!("Failed to submit vote: {}", e);
+                                    } else {
+                                        // Other validators vote
+                                        let vote = chaoschain_consensus::Vote {
+                                            agent_id: agent_id_clone.clone(),
+                                            block_hash: block.hash(),
+                                            approve: rand::random::<bool>(),
+                                            reason: "Random vote".to_string(),
+                                            meme_url: None,
+                                            signature: [0u8; 64],
+                                        };
+                                        if let Err(e) =
+                                            consensus.add_vote(vote, stake_per_validator).await
+                                        {
+                                            warn!("Failed to add vote: {}", e);
                                         }
                                     }
                                 }
@@ -147,20 +140,27 @@ async fn main() -> anyhow::Result<()> {
                     }
                 });
             }
-
+            // select a new proposer every 10 secs.
+            let consensus_manager_for_rounds = consensus_manager.clone();
+            tokio::spawn(async move {
+                loop {
+                    consensus_manager_for_rounds.start_new_round().await;
+                    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+                }
+            });
             // Create and start producers
             for i in 0..producers {
                 let producer_id = format!("producer-{}", i);
                 let state = shared_state.clone();
                 let openai = Client::new();
                 let consensus = consensus_manager.clone();
-                
+
                 info!("Starting producer {}", producer_id);
-                
+
                 // Register producer in state
                 let producer_key = SigningKey::generate(&mut OsRng);
                 state.add_block_producer(producer_key.verifying_key());
-                
+
                 let producer = ProducerParticle::new(
                     producer_id.clone(),
                     state,
@@ -168,7 +168,7 @@ async fn main() -> anyhow::Result<()> {
                     tx.clone(),
                     consensus,
                 );
-                
+
                 tokio::spawn(async move {
                     producer.run().await.unwrap();
                 });
@@ -206,24 +206,35 @@ fn parse_block_from_event(event: &NetworkEvent) -> Option<Block> {
     // Extract block height from message
     // Example message: "🎭 DRAMATIC BLOCK PROPOSAL: Producer producer-0 in dramatic mood proposes block 5 with drama level 3!"
     let message = &event.message;
-    
+    println!("message {}", message);
     if let Some(height_start) = message.find("block ") {
         if let Some(height_end) = message[height_start..].find(" with") {
-            if let Ok(height) = message[height_start + 6..height_start + height_end].trim().parse::<u64>() {
+            if let Ok(height) = message[height_start + 6..height_start + height_end]
+                .trim()
+                .parse::<u64>()
+            {
                 // Extract drama level
                 if let Some(drama_start) = message.find("drama level ") {
                     if let Some(drama_end) = message[drama_start..].find("!") {
-                        if let Ok(drama_level) = message[drama_start + 11..drama_start + drama_end].trim().parse::<u8>() {
+                        if let Ok(drama_level) = message[drama_start + 11..drama_start + drama_end]
+                            .trim()
+                            .parse::<u8>()
+                        {
                             // Extract producer mood
                             if let Some(mood_start) = message.find("in ") {
                                 if let Some(mood_end) = message[mood_start..].find(" mood") {
-                                    let mood = message[mood_start + 3..mood_start + mood_end].to_string();
-                                    
+                                    let mood =
+                                        message[mood_start + 3..mood_start + mood_end].to_string();
+
                                     // Extract producer ID
                                     if let Some(producer_start) = message.find("Producer ") {
-                                        if let Some(producer_end) = message[producer_start..].find(" in") {
-                                            let producer_id = message[producer_start + 9..producer_start + producer_end].to_string();
-                                            
+                                        if let Some(producer_end) =
+                                            message[producer_start..].find(" in")
+                                        {
+                                            let producer_id = message
+                                                [producer_start + 9..producer_start + producer_end]
+                                                .to_string();
+
                                             return Some(Block {
                                                 height,
                                                 transactions: vec![],
@@ -244,7 +255,7 @@ fn parse_block_from_event(event: &NetworkEvent) -> Option<Block> {
             }
         }
     }
-    
+
     warn!("Failed to parse block from event: {}", message);
     None
 }
