@@ -119,6 +119,11 @@ async fn main() -> anyhow::Result<()> {
                                         }
                                     } else {
                                         // Other validators vote
+                                        
+                                        format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", agent_id_clone, block.height);
+                                        
+                                        
+                                        
                                         let vote = chaoschain_consensus::Vote {
                                             agent_id: agent_id_clone.clone(),
                                             block_hash: block.hash(),
