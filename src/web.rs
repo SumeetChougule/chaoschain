@@ -47,6 +47,7 @@ pub struct NetworkStatus {
     pub total_blocks_produced: u64,
     pub total_blocks_validated: u64,
     pub latest_blocks: Vec<String>,
+    pub current_proposer: String,
 }
 
 /// Block info for the web UI
@@ -108,12 +109,13 @@ async fn get_network_status(
     let latest_block = state_guard.get_block_height();
     
     Json(NetworkStatus {
-        validator_count: 4, // We know we started with 4 validators
+        validator_count: chain_state.validators.len() as u32, //4, // We know we started with 4 validators
         producer_count: chain_state.producers.len() as u32,
         latest_block,
         total_blocks_produced: latest_block,
         total_blocks_validated: latest_block,
         latest_blocks,
+        current_proposer: chain_state.proposer
     })
 }
 

@@ -54,6 +54,10 @@
                     <span>Total Blocks Validated:</span>
                     <span id="validated-blocks" class="text-green-400">0</span>
                 </div>
+                <div class="flex justify-between">
+                    <span>Current Proposer:</span>
+                    <span id="proposer-blocks" class="text-green-400">0</span>
+                </div>
             </div>
         </div>
 
@@ -81,12 +85,13 @@
             document.getElementById('latest-block').textContent = `#${data.latest_block}`;
             document.getElementById('total-blocks').textContent = data.total_blocks_produced;
             document.getElementById('validated-blocks').textContent = data.total_blocks_validated;
+            document.getElementById('proposer-blocks').textContent = data.current_proposer;
             
             const blocksDiv = document.getElementById('latest-blocks');
             blocksDiv.innerHTML = data.latest_blocks.map(block => 
                 `<div class="bg-gray-700 rounded p-3">${block}</div>`
             ).join('');
-        }, 5000);
+        }, 1000);
 
         // Connect to SSE for drama feed
         const eventSource = new EventSource('/api/events');
