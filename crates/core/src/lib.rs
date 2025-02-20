@@ -102,7 +102,7 @@ pub struct ChainState {
     /// Block Validators
     pub validators: Vec<String>,
     /// Block Proposer
-    pub proposer: Vec<String>,
+    pub proposer: String,
 }
 
 /// Chain configuration

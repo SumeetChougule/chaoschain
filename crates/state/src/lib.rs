@@ -78,6 +78,8 @@ impl StateStoreImpl {
             state: Arc::new(RwLock::new(ChainState {
                 balances: Vec::new(),
                 producers: Vec::new(),
+                validators: Vec::new(),
+                proposer: String::new(),
             })),
             config,
             last_block_time: Arc::new(RwLock::new(0)),
@@ -103,6 +105,24 @@ impl StateStoreImpl {
         if !state.producers.contains(&producer_str) {
             state.producers.push(producer_str);
         }
+    }
+    
+    ///  Add a whitelisted block validator
+    pub fn add_block_validator(&self, validator: PublicKey) {
+        let mut state = self.state.write();
+        let validator_str = hex::encode(validator.as_bytes());
+        if !state.validators.contains(&validator_str) {
+            state.validators.push(validator_str);
+        }
+    }
+    ///  update a current proposer
+    pub fn update_block_proposer(&self, proposer: String) {
+        let mut state = self.state.write();
+        state.proposer = proposer.clone();
+    //     let proposer_str = hex::encode(proposer.as_bytes());
+    //     if !state.proposer.contains(&proposer_str) {
+    //         state.proposer.push(proposer_str);
+    //     }
     }
 
     /// Check if an address is a valid block producer

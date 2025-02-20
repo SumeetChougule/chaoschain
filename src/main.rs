@@ -9,6 +9,7 @@ use chaoschain_state::{StateStore, StateStoreImpl};
 use clap::Parser;
 use dotenv::dotenv;
 use ed25519_dalek::SigningKey;
+use ethers::types::spoof::State;
 use rand::rngs::OsRng;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -86,6 +87,9 @@ async fn main() -> anyhow::Result<()> {
                 let consensus = consensus_manager.clone();
                 let state = shared_state.clone();
 
+                // Register validater in state
+                state.add_block_validator(signing_key.verifying_key());
+
                 tokio::spawn(async move {
                     let mut rx = rx;
                     loop {
@@ -93,6 +97,14 @@ async fn main() -> anyhow::Result<()> {
                             if event.message.contains("DRAMATIC BLOCK PROPOSAL") {
                                 if let Some(block) = parse_block_from_event(&event) {
                                     let current_proposer = consensus.get_current_proposer().await;
+                                    match current_proposer.clone() {
+                                        Some(proposer) => {
+                                            state.update_block_proposer(proposer);
+                                        }
+                                        None => {
+                                            info!("Error: No proposer found");
+                                        }
+                                    }
                                     // Check if the validator is proposer
                                     if current_proposer.as_ref() == Some(&agent_id_clone) {
                                         // Proposer selects a block
@@ -148,7 +160,7 @@ async fn main() -> anyhow::Result<()> {
                                             } else {
                                                 format!("🎭 Validator {} REJECTS block {} - not dramatic enough!", agent_id_clone, block.height)
                                             };
-                                            
+
                                             if let Err(e) = tx.send(NetworkEvent {
                                                 agent_id: agent_id_clone.clone(),
                                                 message: response,

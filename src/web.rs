@@ -115,7 +115,7 @@ async fn get_network_status(
         total_blocks_produced: latest_block,
         total_blocks_validated: latest_block,
         latest_blocks,
-        current_proposer: "1".into()
+        current_proposer: chain_state.proposer
     })
 }
 
