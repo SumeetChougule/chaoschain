@@ -69,13 +69,8 @@ impl ConsensusManager {
     
         if let Ok(reached) = consensus_result {
             if reached {
-                info!(
-                    "🎭  Consensus reached for block {}",
-                    self.current_block.read().await.as_ref().unwrap().height
-                );
                 let reward: u64 = rand::thread_rng().gen_range(1..10);
                 if let Some(proposer) = self.current_proposer.read().await.clone() {
-                    info!("🎭 Validator {} (proposer) got the reward of {}",proposer, reward);
                     self.award_proposer(proposer, reward).await;
                     
                 }

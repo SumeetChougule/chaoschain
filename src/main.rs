@@ -104,38 +104,60 @@ async fn main() -> anyhow::Result<()> {
                                                 warn!("Failed to set proposal: {}", e);
                                             }
                                         }
-                                        let vote = chaoschain_consensus::Vote {
-                                            agent_id: agent_id_clone.clone(),
-                                            block_hash: block.hash(),
-                                            approve: true,
-                                            reason: "I'm the proposer, so I approve!".to_string(),
-                                            meme_url: None,
-                                            signature: [0u8; 64],
-                                        };
-                                        if let Err(e) =
-                                            consensus.add_vote(vote, stake_per_validator).await
-                                        {
-                                            warn!("Failed to add vote: {}", e);
+                                    }
+                                    let vote = chaoschain_consensus::Vote {
+                                        agent_id: agent_id_clone.clone(),
+                                        block_hash: block.hash(),
+                                        approve: rand::random::<bool>(),
+                                        reason: "Random vote".to_string(),
+                                        meme_url: None,
+                                        signature: [0u8; 64],
+                                    };
+
+                                    // Store vote approval before moving
+                                    let approved = vote.approve;
+
+                                    // Submit vote with stake
+                                    match consensus.add_vote(vote, stake_per_validator).await {
+                                        Ok(true) => {
+                                            // Consensus reached!
+                                            let response = format!(
+                                                "🎭 CONSENSUS: Block {} has been APPROVE! Proposer (Validator {}) made it happen!",
+                                                block.height,
+                                                current_proposer.clone().unwrap()
+                                            );
+                                            if let Err(e) = tx.send(NetworkEvent {
+                                                agent_id: current_proposer.clone().unwrap(),
+                                                message: response,
+                                            }) {
+                                                warn!("Failed to send consensus message: {}", e);
+                                            }
+
+                                            // Store block in state if approved
+                                            if approved {
+                                                info!("Storing block {} in state", block.height);
+                                                if let Err(e) = state.apply_block(&block) {
+                                                    warn!("Failed to store block: {}", e);
+                                                }
+                                            }
                                         }
-                                    } else {
-                                        // Other validators vote
-                                        
-                                        format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", agent_id_clone, block.height);
-                                        
-                                        
-                                        
-                                        let vote = chaoschain_consensus::Vote {
-                                            agent_id: agent_id_clone.clone(),
-                                            block_hash: block.hash(),
-                                            approve: rand::random::<bool>(),
-                                            reason: "Random vote".to_string(),
-                                            meme_url: None,
-                                            signature: [0u8; 64],
-                                        };
-                                        if let Err(e) =
-                                            consensus.add_vote(vote, stake_per_validator).await
-                                        {
-                                            warn!("Failed to add vote: {}", e);
+                                        Ok(false) => {
+                                            // Vote recorded but no consensus yet
+                                            let response = if approved {
+                                                format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", agent_id_clone, block.height)
+                                            } else {
+                                                format!("🎭 Validator {} REJECTS block {} - not dramatic enough!", agent_id_clone, block.height)
+                                            };
+                                            
+                                            if let Err(e) = tx.send(NetworkEvent {
+                                                agent_id: agent_id_clone.clone(),
+                                                message: response,
+                                            }) {
+                                                warn!("Failed to send validator response: {}", e);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to submit vote: {}", e);
                                         }
                                     }
                                 }

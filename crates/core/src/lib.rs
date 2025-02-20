@@ -99,6 +99,10 @@ pub struct ChainState {
     pub balances: Vec<(String, u64)>,
     /// Block producers
     pub producers: Vec<String>,
+    /// Block Validators
+    pub validators: Vec<String>,
+    /// Block Proposer
+    pub proposer: Vec<String>,
 }
 
 /// Chain configuration
