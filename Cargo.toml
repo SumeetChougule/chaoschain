@@ -2,6 +2,8 @@
 name = "chaoschain"
 version = "0.1.0"
 edition = "2021"
+authors = ["ChaosChain Contributors"]
+description = "A Layer 2 blockchain where agents make the rules"
 
 [workspace]
 members = [
