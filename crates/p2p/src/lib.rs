@@ -1,36 +1,32 @@
 use chaoschain_core::{Block, Transaction, NetworkMessage};
 use libp2p::{
-    core::transport::Transport,
+    core::upgrade,
     gossipsub::{
         self,
-        Gossipsub,
-        GossipsubConfigBuilder,
-        GossipsubMessage,
+        Event as GossipsubEvent,
+        IdentTopic as Topic,
         MessageAuthenticity,
         ValidationMode,
-        Topic as GossipsubTopic,
-        GossipsubEvent,
-        IdentTopic,
     },
+    identify,
     identity::Keypair,
-    mdns::{Mdns, MdnsEvent},
-    swarm::{NetworkBehaviour, SwarmEvent},
-    Swarm,
-    PeerId,
-    tcp,
+    mdns,
     noise,
+    ping,
+    swarm::{NetworkBehaviour, SwarmEvent, Config as SwarmConfig},
+    tcp,
     yamux,
+    PeerId,
+    Swarm,
+    Transport,
 };
-use libp2p_swarm_derive::NetworkBehaviour;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use anyhow::Result;
 use futures::StreamExt;
-use thiserror::Error;
 use std::error::Error as StdError;
 use tokio::sync::mpsc;
 use std::time::Duration;
-use sha2::Sha256;
 
 /// P2P message types for agent communication
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,158 +113,193 @@ pub struct BlockVote {
 
 /// Network topics for different message types
 pub struct NetworkTopics {
-    blocks: IdentTopic,
-    transactions: IdentTopic,
-    chat: IdentTopic,
+    blocks: Topic,
+    transactions: Topic,
+    chat: Topic,
 }
 
 impl NetworkTopics {
     pub fn new() -> Self {
         Self {
-            blocks: IdentTopic::new("blocks"),
-            transactions: IdentTopic::new("transactions"),
-            chat: IdentTopic::new("chat"),
+            blocks: Topic::new(BLOCK_TOPIC),
+            transactions: Topic::new(TX_TOPIC),
+            chat: Topic::new(CHAT_TOPIC),
         }
+    }
+
+    pub fn subscribe_all(&self, swarm: &mut Swarm<ChainBehaviour>) {
+        swarm.behaviour_mut().gossipsub.subscribe(&self.blocks).unwrap();
+        swarm.behaviour_mut().gossipsub.subscribe(&self.transactions).unwrap();
+        swarm.behaviour_mut().gossipsub.subscribe(&self.chat).unwrap();
     }
 }
 
+impl Default for NetworkTopics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+const BLOCK_TOPIC: &str = "blocks";
+const TX_TOPIC: &str = "transactions";
+const CHAT_TOPIC: &str = "chat";
+
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "OutEvent")]
-pub struct ChainNetworkBehaviour {
-    gossipsub: Gossipsub,
-    mdns: Mdns,
+#[behaviour(out_event = "ChainBehaviourEvent")]
+pub struct ChainBehaviour {
+    gossipsub: gossipsub::Behaviour,
+    identify: identify::Behaviour,
+    ping: ping::Behaviour,
+    mdns: mdns::tokio::Behaviour,
 }
 
 #[derive(Debug)]
-pub enum OutEvent {
+pub enum ChainBehaviourEvent {
     Gossipsub(GossipsubEvent),
-    Mdns(MdnsEvent),
+    Identify(identify::Event),
+    Ping(ping::Event),
+    Mdns(mdns::Event),
 }
 
-impl From<GossipsubEvent> for OutEvent {
+impl From<GossipsubEvent> for ChainBehaviourEvent {
     fn from(event: GossipsubEvent) -> Self {
-        OutEvent::Gossipsub(event)
+        ChainBehaviourEvent::Gossipsub(event)
     }
 }
 
-impl From<MdnsEvent> for OutEvent {
-    fn from(event: MdnsEvent) -> Self {
-        OutEvent::Mdns(event)
+impl From<identify::Event> for ChainBehaviourEvent {
+    fn from(event: identify::Event) -> Self {
+        ChainBehaviourEvent::Identify(event)
     }
 }
 
-/// P2P network manager
-pub struct Network {
-    swarm: Swarm<ChainNetworkBehaviour>,
+impl From<ping::Event> for ChainBehaviourEvent {
+    fn from(event: ping::Event) -> Self {
+        ChainBehaviourEvent::Ping(event)
+    }
+}
+
+impl From<mdns::Event> for ChainBehaviourEvent {
+    fn from(event: mdns::Event) -> Self {
+        ChainBehaviourEvent::Mdns(event)
+    }
+}
+
+pub struct ChainNetwork {
+    swarm: Swarm<ChainBehaviour>,
     topics: NetworkTopics,
+    event_sender: mpsc::Sender<NetworkMessage>,
 }
 
-impl Network {
-    pub async fn new() -> Result<Self> {
-        let id_keys = Keypair::generate_ed25519();
-        let peer_id = PeerId::from(id_keys.public());
-        info!("Local peer id: {peer_id}");
+impl ChainNetwork {
+    pub async fn new(
+        keypair: Keypair,
+        event_sender: mpsc::Sender<NetworkMessage>,
+    ) -> Result<Self, Box<dyn StdError>> {
+        let peer_id = PeerId::from(keypair.public());
+        let topics = NetworkTopics::default();
 
-        // Create transport
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&id_keys)
-            .expect("Signing libp2p-noise static DH keypair failed.");
-
-        let transport = tcp::TcpConfig::new()
-            .nodelay(true)
-            .upgrade(libp2p::core::upgrade::Version::V1)
-            .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
-            .multiplex(yamux::YamuxConfig::default())
-            .boxed();
-
-        // Create gossipsub
-        let gossipsub_config = GossipsubConfigBuilder::default()
+        // Set up gossipsub
+        let gossipsub_config = gossipsub::ConfigBuilder::default()
             .heartbeat_interval(Duration::from_secs(1))
-            .validation_mode(ValidationMode::Permissive)
+            .validation_mode(ValidationMode::Strict)
             .build()
-            .map_err(|msg| anyhow::anyhow!("Failed to build gossipsub config: {msg}"))?;
+            .expect("Valid config");
 
-        let gossipsub = Gossipsub::new(
-            MessageAuthenticity::Anonymous,
+        let gossipsub = gossipsub::Behaviour::new(
+            MessageAuthenticity::Signed(keypair.clone()),
             gossipsub_config,
-        ).map_err(|msg| anyhow::anyhow!("Failed to create gossipsub: {msg}"))?;
+        )?;
 
-        // Create MDNS
-        let mdns = Mdns::new(Default::default()).await?;
+        // Set up other behaviours
+        let identify = identify::Behaviour::new(identify::Config::new(
+            "chaoschain/1.0.0".to_string(),
+            keypair.public(),
+        ));
+        let ping = ping::Behaviour::new(ping::Config::new());
+        let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), peer_id)?;
 
-        // Create behaviour
-        let behaviour = ChainNetworkBehaviour {
+        // Create network behaviour
+        let behaviour = ChainBehaviour { 
             gossipsub,
+            identify,
+            ping,
             mdns,
         };
 
-        // Create swarm
-        let swarm = Swarm::new(transport, behaviour, peer_id);
+        // Set up transport
+        let transport = tcp::tokio::Transport::new(tcp::Config::default())
+            .upgrade(upgrade::Version::V1)
+            .authenticate(noise::Config::new(&keypair).expect("signing libp2p-noise static DH keypair failed"))
+            .multiplex(yamux::Config::default())
+            .boxed();
 
-        let topics = NetworkTopics::new();
+        // Build the swarm
+        let swarm = Swarm::new(
+            transport,
+            behaviour,
+            peer_id,
+            SwarmConfig::with_tokio_executor(),
+        );
 
-        Ok(Self { swarm, topics })
+        Ok(Self {
+            swarm,
+            topics,
+            event_sender,
+        })
     }
 
-    pub async fn start(&mut self) -> Result<()> {
+    pub async fn start(&mut self) -> Result<(), Box<dyn StdError>> {
+        // Listen on all interfaces
         self.swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
         // Subscribe to topics
-        self.swarm.behaviour_mut().gossipsub.subscribe(&self.topics.blocks)?;
-        self.swarm.behaviour_mut().gossipsub.subscribe(&self.topics.transactions)?;
-        self.swarm.behaviour_mut().gossipsub.subscribe(&self.topics.chat)?;
+        self.topics.subscribe_all(&mut self.swarm);
 
         loop {
             match self.swarm.next().await.expect("Swarm stream is infinite") {
-                SwarmEvent::Behaviour(OutEvent::Gossipsub(GossipsubEvent::Message { 
-                    message: GossipsubMessage { data, .. },
+                SwarmEvent::Behaviour(ChainBehaviourEvent::Gossipsub(GossipsubEvent::Message { 
+                    message,
                     ..
                 })) => {
-                    let msg: NetworkMessage = serde_json::from_slice(&data)?;
-                    match msg {
-                        NetworkMessage::NewBlock(block) => {
-                            info!("Received new block: {:?}", block);
-                        }
-                        NetworkMessage::NewTransaction(tx) => {
-                            info!("Received new transaction: {:?}", tx);
-                        }
-                        NetworkMessage::Chat { from, message } => {
-                            info!("Chat from {}: {}", from, message);
-                        }
-                        NetworkMessage::AgentReasoning { agent, reasoning } => {
-                            info!("Agent {} reasoning: {}", agent, reasoning);
-                        }
-                    }
+                    let msg: NetworkMessage = serde_json::from_slice(&message.data)?;
+                    self.event_sender.send(msg).await?;
+                }
+                SwarmEvent::NewListenAddr { address, .. } => {
+                    info!("Listening on {:?}", address);
                 }
                 _ => {}
             }
         }
     }
 
-    pub async fn broadcast(&mut self, message: NetworkMessage) -> Result<()> {
-        let data = serde_json::to_vec(&message)?;
-        
-        match message {
-            NetworkMessage::NewBlock(_) => {
-                self.swarm.behaviour_mut().gossipsub.publish(
-                    self.topics.blocks.clone(),
-                    data,
-                )?;
-            }
-            NetworkMessage::NewTransaction(_) => {
-                self.swarm.behaviour_mut().gossipsub.publish(
-                    self.topics.transactions.clone(),
-                    data,
-                )?;
-            }
-            NetworkMessage::Chat { .. } | NetworkMessage::AgentReasoning { .. } => {
-                self.swarm.behaviour_mut().gossipsub.publish(
-                    self.topics.chat.clone(),
-                    data,
-                )?;
-            }
-        }
+    pub async fn broadcast_block(&mut self, block: Block) -> Result<(), Box<dyn StdError>> {
+        let msg = NetworkMessage::NewBlock(block);
+        let data = serde_json::to_vec(&msg)?;
+        self.swarm.behaviour_mut().gossipsub.publish(
+            self.topics.blocks.clone(),
+            data,
+        )?;
+        Ok(())
+    }
 
+    pub async fn broadcast_transaction(&mut self, tx: Transaction) -> Result<(), Box<dyn StdError>> {
+        let msg = NetworkMessage::NewTransaction(tx);
+        let data = serde_json::to_vec(&msg)?;
+        self.swarm.behaviour_mut().gossipsub.publish(
+            self.topics.transactions.clone(),
+            data,
+        )?;
+        Ok(())
+    }
+
+    pub async fn broadcast_chat(&mut self, from: String, message: String) -> Result<(), Box<dyn StdError>> {
+        let msg = NetworkMessage::Chat { from, message };
+        let data = serde_json::to_vec(&msg)?;
+        self.swarm.behaviour_mut().gossipsub.publish(
+            self.topics.chat.clone(),
+            data,
+        )?;
         Ok(())
     }
 }

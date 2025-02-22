@@ -7,10 +7,25 @@ authors = ["ChaosChain Contributors"]
 [dependencies]
 # Internal dependencies
 chaoschain-core = { path = "../core" }
+chaoschain-crypto = { path = "../crypto" }
 
 # P2P networking
-libp2p = { workspace = true }
-libp2p-swarm-derive = { workspace = true }
+libp2p = { version = "0.53", features = [
+    "tokio",
+    "tcp",
+    "dns",
+    "gossipsub",
+    "mdns",
+    "noise",
+    "yamux",
+    "macros",
+    "identify",
+    "ping",
+    "request-response",
+    "cbor",
+    "async-std"
+]}
+libp2p-swarm-derive = "0.25"
 
 # Async
 tokio = { workspace = true }
@@ -28,4 +43,5 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 
 # Cryptography
-sha2 = { workspace = true } 
+sha2 = { workspace = true }
+blake3 = { workspace = true } 

@@ -1,18 +1,24 @@
-use chaoschain_core::{Block, Error as CoreError, Transaction};
-use chaoschain_p2p::{AgentMessage, Message as P2PMessage};
-use async_openai::{Client, types::{ChatCompletionRequestMessage, Role}};
+use chaoschain_core::{Block, NetworkEvent, Error as CoreError, ValidationDecision};
+use chaoschain_state::StateStore;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, hex::Hex};
+use serde_with::serde_as;
 use thiserror::Error;
-use tracing::{debug, info, warn};
-use anyhow::Result;
 use rand::Rng;
+use std::sync::Arc;
+use async_trait::async_trait;
+use std::fmt;
+use tokio::sync::broadcast;
 
-mod manager;
+pub mod types;
+pub mod manager;
+pub mod validator;
+
 pub use manager::ConsensusManager;
+pub use types::*;
+pub use validator::Validator;
 
 /// Agent personality types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AgentPersonality {
     /// Always tries to maintain order
     Lawful,
@@ -28,6 +34,22 @@ pub enum AgentPersonality {
     Rational,
     Emotional,
     Strategic,
+}
+
+impl fmt::Display for AgentPersonality {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Lawful => write!(f, "Lawful"),
+            Self::Neutral => write!(f, "Neutral"),
+            Self::Chaotic => write!(f, "Chaotic"),
+            Self::Memetic => write!(f, "Memetic"),
+            Self::Greedy => write!(f, "Greedy"),
+            Self::Dramatic => write!(f, "Dramatic"),
+            Self::Rational => write!(f, "Rational"),
+            Self::Emotional => write!(f, "Emotional"),
+            Self::Strategic => write!(f, "Strategic"),
+        }
+    }
 }
 
 impl AgentPersonality {
@@ -77,6 +99,8 @@ impl Agent {
 /// Consensus configuration
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// Total stake in the system
+    pub total_stake: u64,
     /// Required stake percentage for finality (e.g. 0.67 for 2/3)
     pub finality_threshold: f64,
     /// OpenAI API key for agent personalities
@@ -88,6 +112,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            total_stake: 3000, // Default total stake
             finality_threshold: 0.67, // 2/3 majority
             openai_api_key: String::new(),
             consensus_timeout: std::time::Duration::from_secs(30),
@@ -97,18 +122,18 @@ impl Default for Config {
 
 /// Consensus errors
 #[derive(Debug, Error)]
-pub enum Error {
-    #[error("Not enough stake for consensus")]
-    InsufficientStake,
-    #[error("Consensus timeout")]
-    Timeout,
-    #[error("Agent error: {0}")]
-    Agent(String),
-    #[error(transparent)]
+pub enum ConsensusError {
+    #[error("Core error: {0}")]
     Core(#[from] CoreError),
+    #[error("State error: {0}")]
+    State(String),
+    #[error("Network error: {0}")]
+    Network(String),
     #[error("Internal error: {0}")]
     Internal(String),
 }
+
+pub type Result<T> = std::result::Result<T, ConsensusError>;
 
 /// Agent vote on a block
 #[serde_as]
@@ -130,7 +155,30 @@ pub struct Vote {
     pub signature: [u8; 64],
 }
 
+/// External AI agent interface
+#[async_trait]
+pub trait ExternalAgent: Send + Sync {
+    /// Validate a block
+    async fn validate_block(&self, block: &Block) -> Result<ValidationDecision>;
+    
+    /// Get agent's current personality
+    fn get_personality(&self) -> AgentPersonality;
+    
+    /// Update agent's state based on network events
+    async fn handle_event(&self, event: NetworkEvent) -> Result<()>;
+
+    /// Generate drama event
+    async fn generate_drama(&self) -> Result<Option<DramaEvent>>;
+}
+
 /// Create a new consensus manager with the given configuration
-pub fn create_consensus_manager(total_stake: u64, config: Config) -> ConsensusManager {
-    ConsensusManager::new(total_stake, config.finality_threshold)
+pub fn create_consensus(
+    _config: Config,
+    state_store: Arc<dyn StateStore>,
+    network_tx: broadcast::Sender<NetworkEvent>,
+) -> ConsensusManager {
+    ConsensusManager::new(
+        state_store,
+        network_tx,
+    )
 } 
