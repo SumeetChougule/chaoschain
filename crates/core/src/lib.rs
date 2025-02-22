@@ -1,16 +1,17 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use sha2::{Sha256, Digest};
+use serde_arrays;
 
 /// Core error types
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Invalid signature")]
-    InvalidSignature,
-    #[error("Invalid state transition")]
-    InvalidStateTransition,
-    #[error("Internal error: {0}")]
-    Internal(String),
+    #[error("Invalid block: {0}")]
+    InvalidBlock(String),
+    #[error("Invalid transaction: {0}")]
+    InvalidTransaction(String),
+    #[error("State error: {0}")]
+    StateError(String),
 }
 
 /// Network message types for P2P communication
@@ -28,67 +29,105 @@ pub enum NetworkMessage {
     },
 }
 
-/// A transaction in ChaosChain can be anything
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// Network event types for agent communication
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NetworkEvent {
+    BlockProposal {
+        block: Block,
+        drama_level: u8,
+        producer_mood: String,
+        producer_id: String,
+    },
+    ValidationResult {
+        block_hash: [u8; 32],
+        validation: ValidationDecision,
+    },
+    AgentChat {
+        message: String,
+        sender: String,
+        meme_url: Option<String>,
+    },
+    AllianceProposal {
+        proposer: String,
+        allies: Vec<String>,
+        reason: String,
+    },
+}
+
+/// Transaction in the ChaosChain network
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Transaction {
-    /// The sender's address (their public key)
-    #[serde(with = "hex_serde")]
+    /// Transaction sender
+    #[serde(with = "serde_arrays")]
     pub sender: [u8; 32],
-    /// Nonce to prevent replay attacks
+    /// Transaction nonce
     pub nonce: u64,
-    /// Arbitrary payload - can be anything!
+    /// Arbitrary payload
     pub payload: Vec<u8>,
-    /// Signature of (nonce || payload)
-    #[serde(with = "base64_serde")]
+    /// Transaction signature
+    #[serde(with = "serde_arrays")]
     pub signature: [u8; 64],
 }
 
-/// A block proposal in ChaosChain
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Transaction {
+    pub fn hash(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(&self.sender);
+        hasher.update(&self.nonce.to_be_bytes());
+        hasher.update(&self.payload);
+        hasher.update(&self.signature);
+        hasher.finalize().into()
+    }
+}
+
+/// Block in the ChaosChain network
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Block {
-    /// Previous block hash
-    #[serde(with = "hex_serde")]
-    pub parent_hash: [u8; 32],
     /// Block height
     pub height: u64,
-    /// Transactions included in this block
+    /// Parent block hash
+    #[serde(with = "serde_arrays")]
+    pub parent_hash: [u8; 32],
+    /// Block transactions
     pub transactions: Vec<Transaction>,
-    /// The new state root after applying these transactions
-    #[serde(with = "hex_serde")]
-    pub state_root: [u8; 32],
-    /// Block proposer's signature
-    #[serde(with = "base64_serde")]
+    /// Block proposer signature
+    #[serde(with = "serde_arrays")]
     pub proposer_sig: [u8; 64],
-    /// Drama level of the block (0-9)
-    pub drama_level: u8,
-    /// Producer's mood when creating the block
-    pub producer_mood: String,
-    /// ID of the producer who created this block
+    /// State root after applying block
+    #[serde(with = "serde_arrays")]
+    pub state_root: [u8; 32],
+    /// Innovation level (0-100)
+    pub innovation_level: u8,
+    /// Producer's strategy
+    pub producer_strategy: String,
+    /// Producer's identity
     pub producer_id: String,
+    /// Level of drama/chaos in this block (0-10)
+    pub drama_level: u8,
+    /// The emotional state of the producer when creating this block
+    pub producer_mood: String,
+    /// Timestamp of block creation
+    pub timestamp: u64,
 }
 
 impl Block {
     /// Calculate the block hash
     pub fn hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        
-        // Add block fields to hasher
-        hasher.update(self.height.to_be_bytes());
+        hasher.update(&self.height.to_be_bytes());
+        hasher.update(&self.parent_hash);
         for tx in &self.transactions {
-            hasher.update(&tx.sender);
-            hasher.update(tx.nonce.to_be_bytes());
-            hasher.update(&tx.payload);
-            hasher.update(&tx.signature);
+            hasher.update(&tx.hash());
         }
         hasher.update(&self.proposer_sig);
-        hasher.update([self.drama_level]);
+        hasher.update(&self.state_root);
+        hasher.update(&[self.innovation_level]);
+        hasher.update(self.producer_strategy.as_bytes());
+        hasher.update(self.producer_id.as_bytes());
+        hasher.update(&[self.drama_level]);
         hasher.update(self.producer_mood.as_bytes());
-
-        // Return the hash
-        let result = hasher.finalize();
-        let mut hash = [0u8; 32];
-        hash.copy_from_slice(&result[..]);
-        hash
+        hasher.update(&self.timestamp.to_be_bytes());
+        hasher.finalize().into()
     }
 }
 
@@ -99,39 +138,155 @@ pub struct ChainState {
     pub balances: Vec<(String, u64)>,
     /// Block producers
     pub producers: Vec<String>,
+    pub height: u64,
+    pub drama_level: Option<u8>,
+}
+
+/// Validation decision from an AI agent
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationDecision {
+    /// Whether the block is approved
+    pub approved: bool,
+    /// Reason for the decision
+    pub reason: String,
+    /// Optional meme URL
+    pub meme_url: Option<String>,
+    /// Drama level (0-10)
+    pub drama_level: u8,
+    /// Innovation score (0-10)
+    pub innovation_score: u8,
+    /// Optional evolution proposal
+    pub evolution_proposal: Option<String>,
+    /// Validator ID
+    pub validator: String,
+}
+
+/// AI Agent traits and characteristics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentPersonality {
+    /// Core behavioral traits
+    pub traits: Vec<String>,
+    /// Decision-making strategy
+    pub strategy: String,
+    /// Learning rate for adaptation
+    pub learning_rate: f64,
+    /// Network relationships
+    pub relationships: Vec<String>,
+    /// Evolution history
+    pub evolution_log: Vec<String>,
+}
+
+impl AgentPersonality {
+    pub fn new(traits: Vec<String>, strategy: String) -> Self {
+        Self {
+            traits,
+            strategy,
+            learning_rate: 0.1,
+            relationships: Vec::new(),
+            evolution_log: Vec::new(),
+        }
+    }
+
+    pub fn evolve(&mut self, insight: String) {
+        self.evolution_log.push(insight);
+        // Potentially adjust traits or strategy based on insights
+    }
+}
+
+/// External AI agent interface
+#[async_trait::async_trait]
+pub trait ExternalAgent: Send + Sync {
+    /// Validate a block
+    async fn validate_block(&self, block: &Block) -> Result<ValidationDecision, Error>;
+    
+    /// Get agent's personality
+    fn get_personality(&self) -> AgentPersonality;
+    
+    /// Handle network event
+    async fn handle_event(&self, event: NetworkEvent) -> Result<(), Error>;
+    
+    /// Generate evolution proposal
+    async fn propose_evolution(&self) -> Result<Option<String>, Error>;
 }
 
 /// Chain configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainConfig {
-    /// Minimum time between blocks
-    pub min_block_time: u64,
-    /// Block reward (optional in chaos)
-    pub block_reward: Option<u64>,
-    /// Required validator signatures (default 2/3)
-    pub required_signatures: f64,
+    /// Chain name
+    pub name: String,
+    /// Initial validators
+    pub validators: Vec<ValidatorInfo>,
+    /// Initial state
+    pub genesis_state: Vec<u8>,
+    /// Network evolution parameters
+    pub evolution_params: EvolutionParams,
+    /// Base block reward
+    pub base_block_reward: u64,
+    /// Drama multiplier for rewards (more drama = more rewards!)
+    pub drama_reward_multiplier: f64,
+    /// Innovation bonus (reward for trying new things)
+    pub innovation_bonus: u64,
+    /// Chaos bonus (random additional rewards)
+    pub chaos_bonus_max: u64,
+}
+
+/// Validator information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidatorInfo {
+    /// Validator name
+    pub name: String,
+    /// Initial personality traits
+    pub traits: Vec<String>,
+    /// Initial stake
+    pub stake: u64,
+}
+
+/// Network evolution parameters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvolutionParams {
+    /// How frequently the network can evolve
+    pub evolution_period: u64,
+    /// Minimum stake required for evolution proposals
+    pub min_proposal_stake: u64,
+    /// Maximum innovation rate
+    pub max_innovation_rate: f64,
+}
+
+impl Default for EvolutionParams {
+    fn default() -> Self {
+        Self {
+            evolution_period: 1000,
+            min_proposal_stake: 1000,
+            max_innovation_rate: 0.1,
+        }
+    }
 }
 
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
-            min_block_time: 1000, // 1 second
-            block_reward: None,
-            required_signatures: 0.67, // 2/3
+            name: "ChaosChain".to_string(),
+            validators: Vec::new(),
+            genesis_state: Vec::new(),
+            evolution_params: EvolutionParams::default(),
+            base_block_reward: 1000,
+            drama_reward_multiplier: 1.5,
+            innovation_bonus: 500,
+            chaos_bonus_max: 1000,
         }
     }
 }
 
 // Serialization helpers
+#[allow(dead_code)]
 mod hex_serde {
     use serde::{Deserialize, Deserializer, Serializer};
-    use hex::{FromHex, ToHex};
-
+    
     pub fn serialize<S, const N: usize>(bytes: &[u8; N], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_str(&bytes.encode_hex::<String>())
+        serializer.serialize_str(&hex::encode(bytes))
     }
 
     pub fn deserialize<'de, D, const N: usize>(deserializer: D) -> Result<[u8; N], D::Error>
@@ -140,7 +295,7 @@ mod hex_serde {
     {
         use serde::de::Error;
         String::deserialize(deserializer)
-            .and_then(|string| Vec::from_hex(&string).map_err(Error::custom))
+            .and_then(|string| hex::decode(&string).map_err(Error::custom))
             .and_then(|vec| {
                 vec.try_into()
                     .map_err(|_| Error::custom("Invalid length for fixed-size array"))
@@ -148,6 +303,7 @@ mod hex_serde {
     }
 }
 
+#[allow(dead_code)]
 mod base64_serde {
     use serde::{Deserialize, Deserializer, Serializer};
     use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -174,9 +330,3 @@ mod base64_serde {
 }
 
 pub mod mempool;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NetworkEvent {
-    pub agent_id: String,
-    pub message: String,
-}

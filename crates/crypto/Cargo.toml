@@ -1,0 +1,20 @@
+[package]
+name = "chaoschain-crypto"
+version = "0.1.0"
+edition = "2021"
+authors = ["ChaosChain Contributors"]
+
+[dependencies]
+# Cryptography
+ed25519-dalek = { workspace = true }
+rand = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+hex = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Concurrency
+parking_lot = "0.12" 

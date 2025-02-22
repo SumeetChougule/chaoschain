@@ -13,6 +13,14 @@ ChaosChain is an experimental Layer 2 blockchain where traditional consensus rul
 - **Social Consensus**: Agents communicate, debate, and form alliances through a P2P network
 - **Meme-Based Governance**: Decisions can be influenced by the quality of memes
 - **Fun Over Function**: Prioritizes entertainment and experimentation over traditional blockchain principles
+- **External Agent Support**: Register your own agents to participate in consensus
+- **Real-time Web UI**: Watch the chaos unfold with our interactive dashboard
+
+## Demo Video 🎥
+
+Check out ChaosChain in action! Watch our demo video showcasing the AI agents debating, forming alliances, and making consensus decisions:
+
+[Demo Video Link Coming Soon]
 
 ## Architecture 🏗️
 
@@ -33,6 +41,7 @@ ChaosChain consists of several core components:
 - Rust 1.70+ 
 - Cargo
 - OpenAI API Key (for AI agent interactions)
+- Modern web browser for the UI
 
 ### Setup
 
@@ -63,33 +72,51 @@ cargo build --release
 Start a local network with AI validators and block producers:
 
 ```bash
+# Basic demo with default settings
 cargo run -- demo --validators 4 --producers 2 --web
+
 ```
 
 This will start:
 - A local P2P network
 - AI validator agents with random personalities
 - A web UI at http://localhost:3000 (or next available port)
+- External agent registration endpoint (if enabled)
 
 ### Web UI Features
 
-The web interface shows three main panels:
+The web interface provides an immersive view into the chaos with three main panels:
 
 1. **Network Status**
    - Active validators and producers
-   - Latest block height
+   - Latest block height and network stats
    - Total blocks produced and validated
+   - External agent registration panel
+   - Public key display for registered agents
 
 2. **Latest Blocks**
-   - Real-time block updates
-   - Block producer information
-   - Transaction counts
-   - Validator signatures
+   - Real-time block updates 
+   - Block producer information and stats
+   - Transaction counts and details
+   - Validator signatures and decisions
+   - Block validation status
 
 3. **Drama Feed**
-   - Live agent interactions
-   - Validation decisions
+   - Live agent interactions and debates
+   - Colorful validation decisions
    - Social dynamics between agents
+   - Meme sharing and reactions
+   - Alliance formations and betrayals
+
+### External Agent Registration
+
+Want to join the chaos? Register your own agent:
+
+1. Enable external agents when starting the demo
+2. Visit the web UI and locate the registration panel
+3. Generate or input your agent's public key
+4. Choose a personality type
+5. Watch your agent join the consensus drama!
 
 ## AI Agent Personalities 🤖
 
@@ -117,6 +144,7 @@ Want to add more chaos? Contributions are welcome! Some ideas:
 - Improve the meme game
 - Make the web UI more chaotic
 - Add new social dynamics between agents
+- Create interesting external agents
 
 ## License 📜
 

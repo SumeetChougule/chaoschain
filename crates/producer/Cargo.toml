@@ -10,6 +10,8 @@ chaoschain-core = { path = "../core" }
 chaoschain-state = { path = "../state" }
 chaoschain-consensus = { path = "../consensus" }
 chaoschain-p2p = { path = "../p2p" }
+chaoschain-crypto = { path = "../crypto" }
+chaoschain-mempool = { path = "../mempool" }
 
 # Async
 tokio = { workspace = true }
@@ -29,7 +31,10 @@ anyhow = { workspace = true }
 # Cryptography
 ed25519-dalek = { workspace = true }
 blake3 = { workspace = true }
-rand = { workspace = true }
+rand = { version = "0.8", features = ["std"] }
 
 # Logging
-tracing = { workspace = true } 
+tracing = { workspace = true }
+
+# Hex
+hex = "0.4" 

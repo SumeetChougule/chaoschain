@@ -3,6 +3,7 @@ use parking_lot::RwLock;
 use std::collections::{HashMap, BinaryHeap};
 use std::cmp::Ordering;
 use std::sync::Arc;
+use sha2::{Sha256, Digest};
 
 /// A transaction in the mempool with priority
 #[derive(Debug, Clone)]
@@ -77,7 +78,7 @@ impl Mempool {
 
         // Add to mempool if there's space
         if txs.len() >= self.max_size {
-            return Err(Error::Internal("Mempool is full".to_string()));
+            return Err(Error::StateError("Mempool is full".to_string()));
         }
 
         txs.insert(tx_hash, mempool_tx.clone());
@@ -112,7 +113,7 @@ impl Mempool {
 
     /// Calculate transaction hash
     fn hash_tx(&self, tx: &Transaction) -> [u8; 32] {
-        let mut hasher = blake3::Hasher::new();
+        let mut hasher = Sha256::new();
         hasher.update(&tx.sender);
         hasher.update(&tx.nonce.to_le_bytes());
         hasher.update(&tx.payload);
@@ -123,29 +124,24 @@ impl Mempool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::{Keypair, SigningKey};
 
     #[test]
     fn test_mempool_ordering() {
         let mempool = Mempool::new(1000);
-        let keypair = SigningKey::generate(&mut rand::thread_rng());
-        let public_key = keypair.verifying_key();
 
-        // Create transactions with different gas prices
+        // Create transactions with different priorities
         let tx1 = Transaction {
-            sender: public_key,
+            sender: [1u8; 32],
             nonce: 1,
-            gas_price: 10,
-            payload: vec![],
-            signature: Signature::from_bytes(&[0; 64]).unwrap(),
+            payload: vec![1, 2, 3],
+            signature: [0u8; 64],
         };
 
         let tx2 = Transaction {
-            sender: public_key,
+            sender: [2u8; 32],
             nonce: 2,
-            gas_price: 20,
-            payload: vec![],
-            signature: Signature::from_bytes(&[0; 64]).unwrap(),
+            payload: vec![4, 5, 6],
+            signature: [0u8; 64],
         };
 
         // Add transactions
@@ -155,7 +151,7 @@ mod tests {
         // Check ordering
         let top_txs = mempool.get_top(2);
         assert_eq!(top_txs.len(), 2);
-        assert_eq!(top_txs[0].gas_price, 20); // Higher gas price first
-        assert_eq!(top_txs[1].gas_price, 10);
+        assert_eq!(top_txs[0].nonce, 2); // Higher priority first
+        assert_eq!(top_txs[1].nonce, 1);
     }
 } 

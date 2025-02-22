@@ -1,13 +1,10 @@
 use chaoschain_core::{Block, Error as CoreError};
-use chaoschain_state::StateStore;
 use ethers::{
-    providers::Provider,
     types::{Address, H256},
 };
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, hex::Hex};
 use thiserror::Error;
-use tracing::info;
 
 /// Bridge configuration
 #[derive(Debug, Clone)]
@@ -58,4 +55,36 @@ pub trait Bridge {
     
     /// Check if a block hash exists on L1
     fn verify_block_inclusion(&self, block_hash: [u8; 32]) -> Result<bool, Error>;
+}
+
+// Create a concrete bridge implementation
+pub struct BridgeImpl {
+    pub config: Config,
+    pub bridge_contract: Address,
+}
+
+// Implement the Bridge trait for BridgeImpl
+impl Bridge for BridgeImpl {
+    fn post_update(&mut self, _update: FinalizedBlock) -> Result<H256, Error> {
+        // Implementation here
+        unimplemented!()
+    }
+    
+    fn latest_finalized_root(&self) -> Result<[u8; 32], Error> {
+        // Implementation here
+        unimplemented!()
+    }
+    
+    fn verify_block_inclusion(&self, _block_hash: [u8; 32]) -> Result<bool, Error> {
+        // Implementation here
+        unimplemented!()
+    }
+}
+
+// Move submit_block_to_l1 to BridgeImpl implementation
+impl BridgeImpl {
+    pub async fn submit_block_to_l1(&self, _block: &Block) -> Result<H256, Error> {
+        // Implementation here
+        unimplemented!()
+    }
 } 

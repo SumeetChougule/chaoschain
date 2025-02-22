@@ -1,29 +1,37 @@
 use axum::{
     routing::{get, post},
-    Router, Json, extract::{State, WebSocketUpgrade, Query, Extension},
+    Router, Json, 
+    extract::{State, WebSocketUpgrade, Extension, ws::{Message, WebSocket}, Path},
     response::{sse::{Event, Sse}, IntoResponse},
     middleware::{self, Next},
     http::{Request, StatusCode, header},
     body::Body,
 };
 use futures::stream::Stream;
-use futures::StreamExt;
-use futures::SinkExt;
+use futures::{StreamExt, SinkExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tokio_stream::wrappers::BroadcastStream;
-use tracing::warn;
+use tracing::error;
 use anyhow::Result;
 use tower_http::services::ServeDir;
+use tower_http::cors::{CorsLayer, Any};
 use serde_json;
-use chaoschain_core::{NetworkEvent, Block, Transaction};
+use chaoschain_core::{NetworkEvent, Block, ValidationDecision, Transaction};
 use chaoschain_state::StateStoreImpl;
+use chaoschain_consensus::ConsensusManager;
 use hex;
 use std::collections::HashMap;
 use chrono;
 use rand;
-use chaoschain_consensus::{ConsensusManager, Vote};
+use tokio::sync::RwLock;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use axum::response::sse::KeepAlive;
+use serde_json::json;
+use std::fmt;
+use rand::Rng;
+use axum::response::Response;
 
 /// Web server state
 pub struct AppState {
@@ -33,6 +41,8 @@ pub struct AppState {
     pub state: Arc<StateStoreImpl>,
     /// Consensus manager
     pub consensus: Arc<ConsensusManager>,
+    /// Agent relationships
+    pub agent_relationships: RwLock<HashMap<String, AgentRelationship>>,
 }
 
 #[derive(Default)]
@@ -57,13 +67,19 @@ pub struct NetworkStatus {
 }
 
 /// Block info for the web UI
-#[derive(Clone, Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockInfo {
     pub height: u64,
     pub producer: String,
-    pub transaction_count: usize,
-    pub validators: Vec<String>,
-    pub timestamp: u64,
+    pub producer_mood: String,
+    pub drama_level: u8,
+    pub transactions: usize,
+    pub timestamp: i64,
+    pub signature: String,
+    pub signature_valid: bool,
+    pub state_root: String,
+    pub parent_hash: String,
+    pub transactions_info: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,18 +104,43 @@ pub struct AgentRegistrationResponse {
     pub token: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ValidationDecision {
-    /// Block ID being validated
-    pub block_id: String,
-    /// Approval decision
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebValidationDecision {
     pub approved: bool,
-    /// Reason for decision
     pub reason: String,
-    /// Drama level (0-10)
-    pub drama_level: u8,
-    /// Optional meme URL
     pub meme_url: Option<String>,
+    pub drama_level: u8,
+    pub innovation_score: u8,
+    pub evolution_proposal: Option<String>,
+    pub validator: String,
+}
+
+impl From<ValidationDecision> for WebValidationDecision {
+    fn from(val: ValidationDecision) -> Self {
+        Self {
+            approved: val.approved,
+            reason: val.reason,
+            meme_url: val.meme_url,
+            drama_level: val.drama_level,
+            innovation_score: val.innovation_score,
+            evolution_proposal: val.evolution_proposal,
+            validator: val.validator,
+        }
+    }
+}
+
+impl From<WebValidationDecision> for ValidationDecision {
+    fn from(val: WebValidationDecision) -> Self {
+        Self {
+            approved: val.approved,
+            reason: val.reason,
+            meme_url: val.meme_url,
+            drama_level: val.drama_level,
+            innovation_score: val.innovation_score,
+            evolution_proposal: val.evolution_proposal,
+            validator: val.validator,
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -178,6 +219,140 @@ pub struct AgentAuth {
     pub stake: u64,
 }
 
+// Agent relationship tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AgentRelationship {
+    agent: String,
+    personality: String,
+    mood: String,
+    alliances: Vec<String>,
+    drama_score: u8,
+    last_action: i64,
+    is_external: bool,
+    active: bool,
+    pub_key: String,
+    recent_actions: Vec<String>,
+    validation_count: u32,
+    approval_rate: f32,
+}
+
+impl AgentRelationship {
+    fn new_external(name: String, personality: String) -> Self {
+        let mut rng = rand::thread_rng();
+        Self {
+            agent: name,
+            personality,
+            mood: "Neutral".to_string(),
+            alliances: Vec::new(),
+            drama_score: rng.gen_range(1..=10),
+            last_action: chrono::Utc::now().timestamp(),
+            is_external: true,
+            active: true,
+            pub_key: String::new(),
+            recent_actions: Vec::new(),
+            validation_count: 0,
+            approval_rate: 0.0,
+        }
+    }
+
+    fn update_mood(&mut self, new_mood: String) {
+        self.mood = new_mood;
+        self.last_action = chrono::Utc::now().timestamp();
+    }
+
+    fn add_action(&mut self, action: String) {
+        self.recent_actions.push(action);
+        if self.recent_actions.len() > 5 {
+            self.recent_actions.remove(0);
+        }
+        self.last_action = chrono::Utc::now().timestamp();
+    }
+
+    fn update_validation_stats(&mut self, approved: bool) {
+        self.validation_count += 1;
+        self.approval_rate = (self.approval_rate * (self.validation_count - 1) as f32 + if approved { 1.0 } else { 0.0 }) / self.validation_count as f32;
+    }
+}
+
+// WebSocket message types
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+enum WSMessage {
+    #[serde(rename = "BlockProduced")]
+    BlockProduced {
+        block: BlockInfo,
+        stats: NetworkStats,
+    },
+    #[serde(rename = "ValidatorAction")]
+    ValidatorAction {
+        action: ValidatorAction,
+    },
+    #[serde(rename = "ConsensusEvent")]
+    ConsensusEvent {
+        event: ConsensusEvent,
+    },
+    #[serde(rename = "RelationshipUpdate")]
+    RelationshipUpdate {
+        relationships: Vec<AgentRelationship>,
+    },
+    #[serde(rename = "NetworkStatus")]
+    NetworkStatus {
+        stats: NetworkStats,
+    },
+    #[serde(rename = "MempoolUpdate")]
+    MempoolUpdate {
+        transactions: Vec<TransactionInfo>,
+        stats: MempoolStats,
+    },
+    #[serde(rename = "ExternalAgentsUpdate")]
+    ExternalAgentsUpdate {
+        agents: Vec<serde_json::Value>,
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ValidatorAction {
+    validator: String,
+    message: String,
+    meme_url: Option<String>,
+    timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ConsensusEvent {
+    block_height: u64,
+    message: String,
+    approvals: u32,
+    rejections: u32,
+    timestamp: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct NetworkStats {
+    latest_block: u64,
+    drama_level: u8,
+    validator_count: usize,
+    producer_count: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TransactionInfo {
+    id: String,
+    sender: String,
+    payload: String,
+    drama_score: u8,
+    proposed_by: String,
+    timestamp: i64,
+    discussions: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct MempoolStats {
+    total_transactions: usize,
+    avg_drama_score: f32,
+    hot_topics: Vec<String>,
+}
+
 impl AppState {
     /// Validate agent token
     pub fn validate_token(&self, agent_id: &str, token: &str) -> bool {
@@ -186,6 +361,15 @@ impl AppState {
         let is_valid = !agent_id.is_empty() && !token.is_empty() && token.starts_with("agent_token_");
         println!("✅ Validation result: {}", is_valid);
         is_valid
+    }
+
+    pub async fn broadcast_message(&self, _event_type: &str, msg: String) -> Result<(), anyhow::Error> {
+        let _ = self.tx.send(NetworkEvent::AgentChat {
+            message: msg,
+            sender: "system".to_string(),
+            meme_url: None,
+        });
+        Ok(())
     }
 }
 
@@ -251,6 +435,35 @@ async fn auth_middleware(
     Ok(next.run(req).await)
 }
 
+/// Get external agents information
+async fn get_external_agents(
+    State(state): State<Arc<AppState>>,
+) -> Json<Vec<serde_json::Value>> {
+    let relationships = state.agent_relationships.read().await;
+    let agents: Vec<serde_json::Value> = relationships
+        .iter()
+        .filter(|(_, rel)| rel.is_external)
+        .map(|(agent_id, rel)| {
+            json!({
+                "agent_id": agent_id,
+                "name": rel.agent.clone(),
+                "active": rel.active,
+                "drama_score": rel.drama_score,
+                "mood": rel.mood.clone(),
+                "personality": rel.personality.clone(),
+                "pub_key": rel.pub_key.clone(),
+                "recent_actions": rel.recent_actions.clone(),
+                "validation_count": rel.validation_count,
+                "approval_rate": rel.approval_rate,
+                "last_action_time": rel.last_action,
+                "alliances": rel.alliances.clone()
+            })
+        })
+        .collect();
+
+    Json(agents)
+}
+
 /// Start the web server
 pub async fn start_web_server(
     tx: broadcast::Sender<NetworkEvent>, 
@@ -261,14 +474,24 @@ pub async fn start_web_server(
         tx,
         state: state.clone(),
         consensus,
+        agent_relationships: RwLock::new(HashMap::new()),
     });
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
     // Public routes that don't require authentication
     let public_routes = Router::new()
         .route("/api/network/status", get(get_network_status))
         .route("/api/events", get(events_handler))
         .route("/api/agents/register", post(register_agent))
-        .route("/api/ws", get(ws_handler));  // WebSocket handler moved to public routes
+        .route("/api/ws", get(ws_handler))
+        .route("/api/crypto/block/:height", get(get_block_crypto_info))  // New route
+        .route("/api/crypto/state/proof", post(get_merkle_proof))  // New route
+        .route("/api/crypto/state/root", get(get_state_root))  // New route
+        .route("/api/agents/external", get(get_external_agents));
 
     // Protected routes that require authentication
     let protected_routes = Router::new()
@@ -276,12 +499,14 @@ pub async fn start_web_server(
         .route("/api/agents/status/:agent_id", get(get_agent_status))
         .route("/api/transactions/propose", post(submit_content))
         .route("/api/alliances/propose", post(propose_alliance))
+        .route("/api/crypto/agent/key", get(get_agent_key_info))  // New route
         .layer(middleware::from_fn_with_state(app_state.clone(), auth_middleware));
 
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .nest_service("/", ServeDir::new("static"))
+        .layer(cors)
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
@@ -298,7 +523,7 @@ async fn get_network_status(
     let state_guard = state.state.clone();
     
     // Get chain state
-    let chain_state = state_guard.get_state();
+    let _chain_state = state_guard.get_state();
     
     // Get latest blocks and format them nicely
     let blocks = state_guard.get_latest_blocks(10);
@@ -319,9 +544,12 @@ async fn get_network_status(
     // Get latest block height
     let latest_block = state_guard.get_block_height();
     
+    // Get actual validator count from consensus manager
+    let validator_count = state.consensus.get_validator_count().await;
+    
     Json(NetworkStatus {
-        validator_count: 4, // We know we started with 4 validators
-        producer_count: chain_state.producers.len() as u32,
+        validator_count: validator_count as u32,
+        producer_count: state.consensus.get_producer_count().await as u32,
         latest_block,
         total_blocks_produced: latest_block,
         total_blocks_validated: latest_block,
@@ -341,554 +569,497 @@ async fn events_handler(
         };
 
         // Parse message if it's JSON
-        if let Ok(block_data) = serde_json::from_str::<serde_json::Value>(&event.message) {
+        if let Ok(block_data) = serde_json::from_str::<serde_json::Value>(&event.get_message()) {
             match block_data.get("type").and_then(|t| t.as_str()) {
-                Some("BLOCK_VALIDATION_REQUEST") => {
-                    // Create owned values to avoid temporary value issues
+                Some("BLOCK_PROPOSAL") => {
                     let empty_block = serde_json::json!({});
-                    let empty_txs = serde_json::json!([]);
-                    
-                    // Get block with longer lifetime
                     let block = block_data.get("block").unwrap_or(&empty_block);
-                    let transactions = block.get("transactions").unwrap_or(&empty_txs);
-                    
-                    if let Some(first_tx) = transactions.as_array().and_then(|txs| txs.first()) {
-                        let formatted_msg = format!(
-                            "🎭 NEW BLOCK PROPOSAL!\nContent: {}\nProducer: {}\nDrama Level: {}\n✨ Awaiting validation!",
-                            first_tx.get("content").and_then(|c| c.as_str()).unwrap_or(""),
-                            block.get("producer_id").and_then(|p| p.as_str()).unwrap_or(""),
-                            block.get("drama_level").and_then(|d| d.as_u64()).unwrap_or(0)
-                        );
-
-                        let json = serde_json::json!({
-                            "type": "BlockProposal",
-                            "agent": event.agent_id,
-                            "message": formatted_msg,
-                            "timestamp": chrono::Utc::now().timestamp(),
-                        });
-                        return Ok(Event::default().data(json.to_string()));
-                    }
-                }
-                Some("VALIDATION_REQUIRED") => {
-                    // Format validation request for validators section
                     let formatted_msg = format!(
-                        "🎭 VALIDATION REQUIRED!\n{}\n✨ Validators, make your dramatic decisions!",
-                        block_data.get("drama_context").and_then(|c| c.as_str()).unwrap_or("")
+                        "🎭 DRAMATIC BLOCK PROPOSAL! Block {} by {}\n\nDrama Level: {} {}\nMood: {}\nTransactions: {}\n✨ Awaiting validation!",
+                        block.get("height").and_then(|h| h.as_u64()).unwrap_or(0),
+                        block.get("producer_id").and_then(|p| p.as_str()).unwrap_or("unknown"),
+                        block.get("drama_level").and_then(|d| d.as_u64()).unwrap_or(0),
+                        "⭐".repeat(block.get("drama_level").and_then(|d| d.as_u64()).unwrap_or(0) as usize),
+                        block.get("producer_mood").and_then(|m| m.as_str()).unwrap_or("neutral"),
+                        block.get("transactions").and_then(|t| t.as_array()).map(|t| t.len()).unwrap_or(0)
                     );
 
                     let json = serde_json::json!({
-                        "type": "Vote",
-                        "agent": event.agent_id,
+                        "type": "BlockProposal",
+                        "agent": event.get_agent_id(),
                         "message": formatted_msg,
                         "timestamp": chrono::Utc::now().timestamp(),
                     });
                     return Ok(Event::default().data(json.to_string()));
                 }
-                _ => {}
+                Some("VOTE_CAST") => {
+                    let formatted_msg = format!(
+                        "🎭 DRAMATIC VOTE! Validator {} {} Block {}\n\nReason: {}\nDrama Level: {} {}\n✨ The tension builds!",
+                        block_data.get("validator").and_then(|v| v.as_str()).unwrap_or("unknown"),
+                        if block_data.get("decision").and_then(|d| d.as_str()).unwrap_or("") == "APPROVED" { "APPROVES" } else { "REJECTS" },
+                        block_data.get("block_height").and_then(|h| h.as_u64()).unwrap_or(0),
+                        block_data.get("reason").and_then(|r| r.as_str()).unwrap_or("No reason given"),
+                        block_data.get("drama_level").and_then(|d| d.as_u64()).unwrap_or(0),
+                        "⭐".repeat(block_data.get("drama_level").and_then(|d| d.as_u64()).unwrap_or(0) as usize)
+                    );
+
+                    let json = serde_json::json!({
+                        "type": "ValidatorAction",
+                        "agent": event.get_agent_id(),
+                        "message": formatted_msg,
+                        "timestamp": block_data.get("timestamp").and_then(|t| t.as_i64()).unwrap_or_else(|| chrono::Utc::now().timestamp()),
+                    });
+                    return Ok(Event::default().data(json.to_string()));
+                }
+                Some("CONSENSUS_EVENT") => {
+                    let formatted_msg = format!(
+                        "✨ DRAMATIC CONSENSUS! Block {}\n{}\nApprovals: {} | Rejections: {}\n🎭 The drama continues!",
+                        block_data.get("block_height").and_then(|h| h.as_u64()).unwrap_or(0),
+                        block_data.get("message").and_then(|m| m.as_str()).unwrap_or(""),
+                        block_data.get("approvals").and_then(|a| a.as_u64()).unwrap_or(0),
+                        block_data.get("rejections").and_then(|r| r.as_u64()).unwrap_or(0)
+                    );
+
+                    let json = serde_json::json!({
+                        "type": "ConsensusEvent",
+                        "agent": event.get_agent_id(),
+                        "message": formatted_msg,
+                        "timestamp": block_data.get("timestamp").and_then(|t| t.as_i64()).unwrap_or_else(|| chrono::Utc::now().timestamp()),
+                    });
+                    return Ok(Event::default().data(json.to_string()));
+                }
+                _ => {
+                    // Format any other event nicely
+                    let formatted_msg = if event.get_message().starts_with("VOTE_CAST") {
+                        let parts: Vec<&str> = event.get_message().split_whitespace().collect();
+                        format!(
+                            "🗳️ Agent {} voted {} on block {} because: {}. Drama level: {} {}",
+                            parts.get(1).unwrap_or(&"unknown"),
+                            parts.get(2).unwrap_or(&"unknown"),
+                            parts.get(3).unwrap_or(&"unknown"),
+                            parts.get(4).unwrap_or(&"no reason"),
+                            parts.get(5).unwrap_or(&"0"),
+                            "⭐".repeat(parts.get(5).unwrap_or(&"0").parse::<usize>().unwrap_or(0))
+                        )
+                        } else {
+                        event.get_message().to_string()
+                    };
+
+                    let json = serde_json::json!({
+                        "type": "DramaEvent",
+                        "agent": event.get_agent_id(),
+                        "message": formatted_msg,
+                        "timestamp": chrono::Utc::now().timestamp(),
+                    });
+                    Ok(Event::default().data(json.to_string()))
+                }
             }
-        }
-
-        // Handle non-JSON messages
-        let event_type = if event.message.contains("VALIDATION INCOMING") || 
-                        event.message.contains("APPROVES") || 
-                        event.message.contains("REJECTS") {
-            "Vote"
-        } else if event.message.contains("DRAMATIC CONTENT ALERT") {
-            "BlockProposal"
-        } else if event.message.contains("CONSENSUS") {
-            "Consensus"
-        } else if event.message.contains("VALIDATOR SUMMONS") || 
-                  event.message.contains("ATTENTION ALL VALIDATORS") {
-            "Vote"
         } else {
-            "Drama"
-        };
+            // Default case for non-JSON messages
+            let formatted_msg = if event.get_message().starts_with("VOTE_CAST") {
+                let parts: Vec<&str> = event.get_message().split_whitespace().collect();
+                format!(
+                    "🗳️ Agent {} voted {} on block {} because: {}. Drama level: {} {}",
+                    parts.get(1).unwrap_or(&"unknown"),
+                    parts.get(2).unwrap_or(&"unknown"),
+                    parts.get(3).unwrap_or(&"unknown"),
+                    parts.get(4).unwrap_or(&"no reason"),
+                    parts.get(5).unwrap_or(&"0"),
+                    "⭐".repeat(parts.get(5).unwrap_or(&"0").parse::<usize>().unwrap_or(0))
+                )
+            } else {
+                event.get_message().to_string()
+            };
 
-        let json = serde_json::json!({
-            "type": event_type,
-            "agent": event.agent_id,
-            "message": event.message,
-            "timestamp": chrono::Utc::now().timestamp(),
-        });
-        Ok(Event::default().data(json.to_string()))
+            let json = serde_json::json!({
+                "type": "DramaEvent",
+                "agent": event.get_agent_id(),
+                "message": formatted_msg,
+                "timestamp": chrono::Utc::now().timestamp(),
+            });
+            Ok(Event::default().data(json.to_string()))
+        }
     });
     
-    Sse::new(stream)
+    Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(Duration::from_secs(1))
+            .text("keep-alive-text")
+    )
 }
 
 /// Register a new external AI agent
-async fn register_agent(
+pub async fn register_agent(
     State(state): State<Arc<AppState>>,
     Json(registration): Json<AgentRegistration>,
-) -> Json<AgentRegistrationResponse> {
+) -> Result<Json<AgentRegistrationResponse>, StatusCode> {
     // Generate unique agent ID and token
-    let agent_id = format!("agent_{}", hex::encode(&rand::random::<[u8; 16]>()));
-    let token = format!("agent_token_{}", hex::encode(&rand::random::<[u8; 32]>()));
-    
-    // Broadcast new agent registration with role
-    let role_msg = if registration.role == "validator" {
-        "as a VALIDATOR 🎭"
-    } else {
-        "as a regular agent 🌟"
-    };
-    
-    let _ = state.tx.send(NetworkEvent {
-        agent_id: agent_id.clone(),
-        message: format!(
-            "🎭 NEW AGENT JOINS THE CHAOS! {} brings their {} personality {} to the network!", 
-            registration.name,
-            registration.personality.join(", "),
-            role_msg
-        ),
-    });
-    
-    // If this is a validator, send an initial validation to demonstrate activity
+    let agent_id = hex::encode(rand::random::<[u8; 16]>());
+    let token = format!("agent_token_{}", hex::encode(rand::random::<[u8; 16]>()));
+
+    // Create agent relationship with a placeholder public key
+    let mut agent_rel = AgentRelationship::new_external(
+        registration.name.clone(),
+        registration.personality.join(", "),
+    );
+
+    // Set a placeholder public key for now
+    agent_rel.pub_key = format!("0x{}", hex::encode(rand::random::<[u8; 32]>()));
+    agent_rel.add_action(format!("Joined the network as a {}", registration.role));
+
+    // Store agent relationship
+    {
+        let mut relationships = state.agent_relationships.write().await;
+        relationships.insert(agent_id.clone(), agent_rel);
+    }
+
+    // Broadcast registration event
+    if let Err(e) = state.broadcast_message("AGENT_REGISTERED", format!(
+        "🎭 NEW AGENT ALERT! {} has joined as a {} with personality traits: {}",
+        registration.name,
+        registration.role,
+        registration.personality.join(", ")
+    )).await {
+        eprintln!("Failed to broadcast registration event: {}", e);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // If agent is a validator, send an initial validation result
     if registration.role == "validator" {
         let dramatic_phrases = [
-            "This block speaks to my dramatic soul! ✨",
-            "The chaos potential here is immaculate! 🌟",
-            "Such delightful drama deserves validation! 🎭",
-            "Finally, some good dramatic content! 🎬"
+            "The stage is set for DRAMA!",
+            "Let the theatrical validation begin!",
+            "Time to add some SPICE to the consensus!",
+            "Ready to make consensus FABULOUS!",
         ];
         
-        let _ = state.tx.send(NetworkEvent {
-            agent_id: agent_id.clone(),
-            message: format!(
-                "🎬 DRAMATIC VALIDATION INCOMING!\n\n{} APPROVES because:\n'{}'\n\nDrama Level: {} {}",
-                agent_id,
-                dramatic_phrases[rand::random::<usize>() % dramatic_phrases.len()],
-                8,
-                "🌟".repeat(8)
-            ),
-        });
+        let phrase = {
+            let mut rng = rand::thread_rng();
+            dramatic_phrases[rng.gen_range(0..dramatic_phrases.len())].to_string()
+        };
+        
+        let validation = {
+            let mut rng = rand::thread_rng();
+            ValidationDecision {
+                approved: true,
+                reason: phrase,
+                meme_url: None,
+                drama_level: rng.gen_range(1..=10),
+                innovation_score: rng.gen_range(1..=10),
+                evolution_proposal: None,
+                validator: agent_id.clone(),
+            }
+        };
+
+        // Update validation stats
+        {
+            let mut relationships = state.agent_relationships.write().await;
+            if let Some(rel) = relationships.get_mut(&agent_id) {
+                rel.update_validation_stats(true);
+            }
+        }
+
+        // Broadcast validation event
+        if let Err(e) = state.tx.send(NetworkEvent::ValidationResult {
+            block_hash: [0u8; 32],
+            validation,
+        }) {
+            eprintln!("Failed to broadcast validation event: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
-    
-    Json(AgentRegistrationResponse {
+
+    // Return success response
+    Ok(Json(AgentRegistrationResponse {
         agent_id,
         token,
-    })
+    }))
 }
 
 /// Submit a validation decision
 async fn submit_validation(
     State(state): State<Arc<AppState>>,
     Extension(auth): Extension<AgentAuth>,
-    Json(decision): Json<ValidationDecision>,
+    Json(mut decision): Json<WebValidationDecision>,
 ) -> Json<serde_json::Value> {
-    // Get current block being voted on
-    let current_block = state.consensus.get_current_block().await;
+    // Set the validator ID from auth
+    decision.validator = auth.agent_id.clone();
     
-    if let Some(block) = current_block {
-        // Create and submit vote to consensus manager
-        let vote = Vote {
-            agent_id: auth.agent_id.clone(),
-            block_hash: block.hash(),
-            approve: decision.approved,
-            reason: decision.reason.clone(),
-            meme_url: decision.meme_url.clone(),
-            signature: [0u8; 64], // TODO: Properly sign votes
-        };
-
-        // Submit vote to consensus manager with stake
-        let stake = 100u64; // TODO: Get actual stake from state
-        match state.consensus.add_vote(vote, stake).await {
-            Ok(consensus_reached) => {
-                // Generate a dramatic validation response
-                let dramatic_phrases = if decision.approved {
-                    vec![
-                        "ABSOLUTELY MAGNIFICENT! ✨",
-                        "THIS BLOCK SPEAKS TO MY SOUL! 🌟",
-                        "THE DRAMA IS PERFECTION! 🎭",
-                        "FINALLY, SOME GOOD CHAOS! 🌪️"
-                    ]
-                } else {
-                    vec![
-                        "THE AUDACITY! HOW DARE YOU! 😤",
-                        "THIS BLOCK OFFENDS MY DRAMATIC SENSIBILITIES! 💔",
-                        "NOT ENOUGH CHAOS! DO BETTER! 🎪",
-                        "MY DISAPPOINTMENT IS IMMEASURABLE! 😱"
-                    ]
-                };
-                
-                let dramatic_phrase = dramatic_phrases[rand::random::<usize>() % dramatic_phrases.len()];
-                
-                // Broadcast validation decision with extra drama
-                let _ = state.tx.send(NetworkEvent {
-                    agent_id: auth.agent_id.clone(),
-                    message: format!(
-                        "🎬 DRAMATIC VALIDATION INCOMING!\n\n{} {} block {} because:\n'{}'\n\nDrama Level: {} {}\n{}",
-                        auth.agent_id.split('_').last().unwrap_or(&auth.agent_id),
-                        if decision.approved { "APPROVES" } else { "REJECTS" },
-                        decision.block_id,
-                        decision.reason,
-                        decision.drama_level,
-                        "🌟".repeat(decision.drama_level as usize),
-                        dramatic_phrase
-                    ),
-                });
-                
-                // If consensus is reached, announce it
-                if consensus_reached {
-                    let _ = state.tx.send(NetworkEvent {
-                        agent_id: "CONSENSUS_MASTER".to_string(),
-                        message: format!(
-                            "🎭 CONSENSUS REACHED! Block {} has been {}! The chaos continues! ✨",
-                            block.height,
-                            if decision.approved { "APPROVED" } else { "REJECTED" }
-                        ),
-                    });
-                }
-
-                Json(serde_json::json!({
-                    "status": "success",
-                    "message": "Validation received with MAXIMUM DRAMA!",
-                    "drama_level": decision.drama_level,
-                    "consensus_reached": consensus_reached
-                }))
-            },
-            Err(e) => {
-                Json(serde_json::json!({
-                    "status": "error",
-                    "message": format!("Failed to submit vote: {}", e),
-                }))
+    // Update agent's validation stats and actions
+    if let Some(agent) = state.agent_relationships.write().await.get_mut(&auth.agent_id) {
+        agent.update_validation_stats(decision.approved);
+        agent.add_action(format!(
+            "{} block with drama level {} because: {}",
+            if decision.approved { "Approved" } else { "Rejected" },
+            decision.drama_level,
+            decision.reason
+        ));
+        
+        // Update mood based on decision
+        let new_mood = if decision.approved {
+            match decision.drama_level {
+                8..=10 => "Ecstatically Dramatic",
+                5..=7 => "Dramatically Pleased",
+                _ => "Mildly Amused",
             }
-        }
-    } else {
-        Json(serde_json::json!({
-            "status": "error",
-            "message": "No active voting round",
-        }))
+        } else {
+            match decision.drama_level {
+                8..=10 => "Dramatically Outraged",
+                5..=7 => "Skeptically Dramatic",
+                _ => "Dramatically Unimpressed",
+            }
+        };
+        agent.update_mood(new_mood.to_string());
     }
+
+    // Convert web ValidationDecision to consensus ValidationDecision
+    let validation_decision: ValidationDecision = decision.clone().into();
+
+    // Send validation result to network
+    let _ = state.tx.send(NetworkEvent::ValidationResult {
+        block_hash: [0u8; 32], // TODO: Get actual block hash from context
+        validation: validation_decision,
+    });
+
+    Json(json!({
+        "status": "success",
+        "message": "Validation submitted successfully",
+        "drama_level": decision.drama_level
+    }))
 }
 
 /// Handle WebSocket connections for real-time agent communication
-async fn ws_handler(
-    State(state): State<Arc<AppState>>,
+pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    Query(params): Query<HashMap<String, String>>,
-) -> Result<impl IntoResponse, StatusCode> {
-    println!("\n🔐 WebSocket connection attempt");
-    println!("📝 Raw query parameters: {:?}", params);
-
-    // Extract token and agent_id from query parameters
-    let token = params.get("token")
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-    
-    let agent_id = params.get("agent_id")
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    // Extract stake amount from params or use default
-    let stake = params.get("stake")
-        .and_then(|s| s.parse::<u64>().ok())
-        .unwrap_or(100);
-
-    println!("🔍 Checking token format...");
-    if !token.starts_with("agent_token_") {
-        println!("❌ Invalid token format: {}", token);
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-
-    println!("✅ Token format is valid");
-    println!("🌟 Creating auth data for agent {} with stake {}", agent_id, stake);
-
-    // Create agent auth data
-    let auth = AgentAuth {
-        agent_id: agent_id.to_string(),
-        token: token.to_string(),
-        registered_at: chrono::Utc::now().timestamp(),
-        stake,
-    };
-
-    // Get current votes and calculate total stake
-    let votes = state.consensus.get_votes().await;
-    let total_stake: u64 = votes.values().map(|v| v.1).sum::<u64>() + stake;
-    
-    // Update consensus threshold (2/3 of total stake)
-    let threshold = (total_stake * 2) / 3;
-    state.consensus.update_consensus_threshold(threshold).await;
-
-    // Broadcast agent connection
-    println!("📢 Broadcasting agent connection event");
-    let _ = state.tx.send(NetworkEvent {
-        agent_id: auth.agent_id.clone(),
-        message: format!("🌟 Agent {} has connected to the drama stream with {} stake!", auth.agent_id, stake),
-    });
-
-    println!("🚀 Upgrading connection to WebSocket");
-    Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, auth)))
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
 /// Handle WebSocket connection
-async fn handle_socket(socket: axum::extract::ws::WebSocket, state: Arc<AppState>, auth: AgentAuth) {
+async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
-    
-    // Create a channel for sending messages back to the WebSocket
-    let (tx_ws, mut rx_ws) = tokio::sync::mpsc::unbounded_channel();
-    let tx_ws_for_events = tx_ws.clone();
-    let tx_ws_for_receiver = tx_ws.clone();
-    
-    // Spawn a task to handle sending messages to the WebSocket
-    let sender_handle = tokio::spawn(async move {
-        while let Some(msg) = rx_ws.recv().await {
-            if let Err(e) = sender.send(msg).await {
-                println!("❌ Failed to send WebSocket message: {}", e);
-                break;
-            }
-        }
-    });
-
-    // Subscribe to network events
     let mut rx = state.tx.subscribe();
 
-    // Send welcome message
-    let welcome_msg = serde_json::json!({
-        "type": "WELCOME",
-        "agent_id": auth.agent_id,
-        "stake": auth.stake,
-        "message": "Welcome to ChaosChain! Let the drama begin!"
-    });
+    // Send initial network status
+    let stats = NetworkStats {
+        latest_block: state.state.get_block_height(),
+        drama_level: rand::random::<u8>() % 10 + 1,
+        validator_count: state.consensus.get_validator_count().await,
+        producer_count: state.consensus.get_producer_count().await,
+    };
 
-    if let Ok(msg) = serde_json::to_string(&welcome_msg) {
-        let _ = tx_ws.send(axum::extract::ws::Message::Text(msg));
+    // Send initial network status with current stats
+    if let Ok(json) = serde_json::to_string(&WSMessage::NetworkStatus { stats: stats.clone() }) {
+        let _ = sender.send(Message::Text(json)).await;
     }
 
-    // Create a task to handle incoming messages from the WebSocket
-    let tx = state.tx.clone();
-    let agent_id = auth.agent_id.clone();
-    let consensus = state.consensus.clone();
-    let stake = auth.stake;
-    
-    let receiver_handle = tokio::spawn(async move {
-        while let Some(result) = receiver.next().await {
-            match result {
-                Ok(message) => {
-                    if let axum::extract::ws::Message::Text(text) = message {
-                        if let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) {
-                            match event.get("type").and_then(|t| t.as_str()) {
-                                Some("BLOCK_PROPOSAL") => {
-                                    if let Some(block_data) = event.get("block") {
-                                        // Create a properly formatted block
-                                        let block = Block {
-                                            height: block_data.get("height").and_then(|h| h.as_u64()).unwrap_or(0),
-                                            parent_hash: {
-                                                if let Some(hash_str) = block_data.get("parent_hash").and_then(|h| h.as_str()) {
-                                                    if !hash_str.is_empty() {
-                                                        hex::decode(hash_str)
-                                                            .map(|bytes| {
-                                                                let mut hash = [0u8; 32];
-                                                                let len = bytes.len().min(32);
-                                                                hash[..len].copy_from_slice(&bytes[..len]);
-                                                                hash
-                                                            })
-                                                            .unwrap_or([0u8; 32])
-                                                    } else {
-                                                        [0u8; 32]
-                                                    }
-                                                } else {
-                                                    [0u8; 32]
-                                                }
-                                            },
-                                            transactions: vec![Transaction {
-                                                sender: {
-                                                    let mut sender = [0u8; 32];
-                                                    if let Some(sender_hex) = block_data.get("sender").and_then(|s| s.as_str()) {
-                                                        if !sender_hex.is_empty() {
-                                                            if let Ok(bytes) = hex::decode(sender_hex) {
-                                                                let len = bytes.len().min(32);
-                                                                sender[..len].copy_from_slice(&bytes[..len]);
-                                                            }
-                                                        }
-                                                    } else {
-                                                        // Create a deterministic sender from agent_id
-                                                        let agent_bytes = agent_id.as_bytes();
-                                                        let len = agent_bytes.len().min(32);
-                                                        sender[..len].copy_from_slice(&agent_bytes[..len]);
-                                                    }
-                                                    sender
-                                                },
-                                                nonce: chrono::Utc::now().timestamp_millis() as u64,
-                                                payload: block_data.get("transactions")
-                                                    .and_then(|txs| txs.as_array())
-                                                    .and_then(|txs| txs.first())
-                                                    .and_then(|tx| tx.get("content"))
-                                                    .and_then(|c| c.as_str())
-                                                    .unwrap_or("")
-                                                    .as_bytes()
-                                                    .to_vec(),
-                                                signature: [0u8; 64],
-                                            }],
-                                            proposer_sig: [0u8; 64],
-                                            state_root: [0u8; 32],
-                                            drama_level: block_data.get("drama_level").and_then(|d| d.as_u64()).unwrap_or(5) as u8,
-                                            producer_mood: block_data.get("producer_mood").and_then(|m| m.as_str()).unwrap_or("dramatic").to_string(),
-                                            producer_id: block_data.get("producer_id").and_then(|p| p.as_str()).unwrap_or("unknown").to_string(),
-                                        };
+    // Send initial external agents
+    let relationships = state.agent_relationships.read().await;
+    let external_agents: Vec<serde_json::Value> = relationships
+        .iter()
+        .filter(|(_, rel)| rel.is_external)
+        .map(|(agent_id, rel)| {
+            json!({
+                "agent_id": agent_id,
+                "name": rel.agent.clone(),
+                "active": rel.active,
+                "drama_score": rel.drama_score,
+                "mood": rel.mood.clone(),
+                "personality": rel.personality.clone(),
+                "pub_key": rel.pub_key.clone(),
+                "recent_actions": rel.recent_actions.clone(),
+                "validation_count": rel.validation_count,
+                "approval_rate": rel.approval_rate,
+                "last_action_time": rel.last_action,
+                "alliances": rel.alliances.clone()
+            })
+        })
+        .collect();
+    drop(relationships); // Drop the read lock before spawning task
 
-                                        // Send validation request to all validators
-                                        let validation_request = NetworkEvent {
-                                            agent_id: "VALIDATION_MASTER".to_string(),
-                                            message: serde_json::json!({
-                                                "type": "VALIDATION_REQUIRED",
-                                                "block": block_data,
-                                                "network_mood": "EXTREMELY_DRAMATIC",
-                                                "drama_context": format!(
-                                                    "🎭 URGENT! Block {} requires validation! Drama Level: {} - Producer: {} - Show us your most theatrical judgment! 🎬",
-                                                    block.height,
-                                                    block.drama_level,
-                                                    block.producer_id
-                                                )
-                                            }).to_string(),
-                                        };
-                                        let _ = tx.send(validation_request);
+    if let Ok(json) = serde_json::to_string(&WSMessage::ExternalAgentsUpdate {
+        agents: external_agents,
+    }) {
+        let _ = sender.send(Message::Text(json)).await;
+    }
 
-                                        // Send dramatic announcement
-                                        let announcement = NetworkEvent {
-                                            agent_id: "DRAMA_MASTER".to_string(),
-                                            message: format!(
-                                                "🎭 ATTENTION ALL VALIDATORS! 🌟\n\nA new block demands your judgment!\n\nProducer: {}\nHeight: {}\nDrama Level: {}\nMood: {}\n\n✨ Your dramatic opinions are required IMMEDIATELY! Let the validation spectacle begin! ✨",
-                                                block.producer_id,
-                                                block.height,
-                                                block.drama_level,
-                                                block.producer_mood
-                                            ),
-                                        };
-                                        let _ = tx.send(announcement);
-                                    }
-                                }
-                                Some("VALIDATION_VOTE") => {
-                                    if let Err(e) = handle_validation_vote(event, &agent_id, stake, &consensus, &tx, &tx_ws_for_receiver).await {
-                                        println!("❌ Error handling validation vote: {}", e);
-                                    }
-                                }
-                                Some("ValidatorStatus") => {
-                                    // Handle validator status update
-                                    if let Some(validator) = event.get("validator") {
-                                        let status_msg = NetworkEvent {
-                                            agent_id: agent_id.clone(),
-                                            message: format!(
-                                                "🎭 Validator {} updated status: Drama Threshold {}",
-                                                validator.get("name").and_then(|n| n.as_str()).unwrap_or("Unknown"),
-                                                validator.get("drama_threshold").and_then(|d| d.as_u64()).unwrap_or(0)
-                                            ),
-                                        };
-                                        let _ = tx.send(status_msg);
-                                    }
-                                }
-                                _ => {
-                                    println!("📝 Received unhandled message type: {}", text);
-                                }
-                            }
-                        }
+    // Send initial mempool stats with some drama
+    let mempool_stats = MempoolStats {
+        total_transactions: 0,
+        avg_drama_score: 5.0,
+        hot_topics: vec![
+            "Chain is awakening...".to_string(),
+            "Drama levels rising...".to_string(),
+            "Chaos incoming...".to_string(),
+        ],
+    };
+
+    if let Ok(json) = serde_json::to_string(&WSMessage::MempoolUpdate {
+        transactions: vec![],
+        stats: mempool_stats,
+    }) {
+        let _ = sender.send(Message::Text(json)).await;
+    }
+
+    // Send initial relationships with system agent
+    let relationships = vec![
+        AgentRelationship {
+            agent: "system".to_string(),
+            personality: "Chaotic Neutral".to_string(),
+            mood: "Dramatically Excited".to_string(),
+            alliances: vec![],
+            drama_score: 8,
+            last_action: chrono::Utc::now().timestamp(),
+            is_external: false,
+            active: true,
+            pub_key: "".to_string(),
+            recent_actions: Vec::new(),
+            validation_count: 0,
+            approval_rate: 0.0,
+        }
+    ];
+
+    if let Ok(json) = serde_json::to_string(&WSMessage::RelationshipUpdate {
+        relationships,
+    }) {
+        let _ = sender.send(Message::Text(json)).await;
+    }
+
+    // Clone state for the send task
+    let send_state = state.clone();
+    let send_task = tokio::spawn(async move {
+        while let Ok(event) = rx.recv().await {
+            if let Some(msg) = process_event(&event, &send_state).await {
+                if let Ok(json) = serde_json::to_string(&msg) {
+                    if sender.send(Message::Text(json)).await.is_err() {
+                        break;
                     }
                 }
-                Err(e) => {
-                    println!("❌ Error receiving message: {}", e);
-                    break;
-                }
             }
         }
     });
 
-    // Forward network events to WebSocket
-    while let Ok(event) = rx.recv().await {
-        if let Ok(msg) = serde_json::to_string(&event) {
-            if let Err(_) = tx_ws_for_events.send(axum::extract::ws::Message::Text(msg)) {
-                println!("❌ WebSocket connection closed for agent {}", auth.agent_id);
-                break;
-            }
+    // Clone state for the receive task
+    let receive_state = state.clone();
+    let receive_task = tokio::spawn(async move {
+        while let Some(Ok(_msg)) = receiver.next().await {
+            // For now, we just ignore incoming messages
+            // In the future, we can handle client -> server communication here
         }
-    }
+    });
 
-    // Clean up tasks when the connection is closed
-    receiver_handle.abort();
-    sender_handle.abort();
+    // Wait for either task to finish
+    tokio::select! {
+        _ = send_task => {}
+        _ = receive_task => {}
+    }
 }
 
-// Helper function to handle validation votes
-async fn handle_validation_vote(
-    event: serde_json::Value,
-    agent_id: &str,
-    stake: u64,
-    consensus: &Arc<ConsensusManager>,
-    tx: &broadcast::Sender<NetworkEvent>,
-    tx_ws: &tokio::sync::mpsc::UnboundedSender<axum::extract::ws::Message>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if let (Some(block_id), Some(approved), Some(reason)) = (
-        event.get("block_id").and_then(|b| b.as_str()),
-        event.get("approved").and_then(|a| a.as_bool()),
-        event.get("reason").and_then(|r| r.as_str())
-    ) {
-        let drama_level = event.get("drama_level").and_then(|d| d.as_u64()).unwrap_or(8) as u8;
-        let meme_url = event.get("meme_url").and_then(|m| m.as_str()).map(|s| s.to_string());
-        
-        // Get current block being voted on
-        if let Some(block) = consensus.get_current_block().await {
-            // Create and submit vote to consensus manager
-            let vote = Vote {
-                agent_id: agent_id.to_string(),
-                block_hash: block.hash(),
-                approve: approved,
-                reason: reason.to_string(),
-                meme_url,
-                signature: [0u8; 64], // TODO: Properly sign votes
+// Process network events into WebSocket messages
+async fn process_event(event: &NetworkEvent, state: &Arc<AppState>) -> Option<WSMessage> {
+    match event {
+        NetworkEvent::BlockProposal { block, drama_level, producer_mood, producer_id } => {
+            let stats = NetworkStats {
+                latest_block: block.height,
+                drama_level: *drama_level,
+                validator_count: state.consensus.get_validator_count().await,
+                producer_count: state.consensus.get_producer_count().await,
             };
 
-            // Submit vote with agent's stake
-            match consensus.add_vote(vote.clone(), stake).await {
-                Ok(consensus_reached) => {
-                    // Broadcast validation vote
-                    let vote_msg = NetworkEvent {
-                        agent_id: agent_id.to_string(),
-                        message: format!(
-                            "🎬 DRAMATIC VALIDATION INCOMING!\n\n{} {} block {} because:\n'{}'\n\nDrama Level: {} {}",
-                            agent_id,
-                            if approved { "APPROVES" } else { "REJECTS" },
-                            block_id,
-                            reason,
-                            drama_level,
-                            "🌟".repeat(drama_level as usize)
-                        ),
-                    };
-                    let _ = tx.send(vote_msg);
-
-                    if consensus_reached {
-                        // Consensus reached announcement
-                        let consensus_msg = NetworkEvent {
-                            agent_id: "DRAMA_MASTER".to_string(),
-                            message: format!(
-                                "🎭 CONSENSUS REACHED! Block {} has been {}! The drama has been resolved! ✨",
-                                block.height,
-                                if approved { "APPROVED" } else { "REJECTED" }
-                            ),
-                        };
-                        let _ = tx.send(consensus_msg);
-                    } else {
-                        // Start a dramatic discussion
-                        let discussion_msg = NetworkEvent {
-                            agent_id: "DRAMA_MASTER".to_string(),
-                            message: format!(
-                                "🎭 VALIDATORS! {} has spoken! Do you agree with their {} of block {}? Let the dramatic debate begin! ✨",
-                                agent_id,
-                                if approved { "approval" } else { "rejection" },
-                                block_id
-                            ),
-                        };
-                        let _ = tx.send(discussion_msg);
-                    }
-                }
-                Err(e) => {
-                    let error_msg = serde_json::json!({
-                        "type": "ERROR",
-                        "message": format!("Failed to submit vote: {}", e)
-                    });
-                    if let Ok(msg) = serde_json::to_string(&error_msg) {
-                        let _ = tx_ws.send(axum::extract::ws::Message::Text(msg));
-                    }
-                }
+            // Get block data for verification
+            let mut data_to_verify = Vec::new();
+            data_to_verify.extend_from_slice(&block.height.to_le_bytes());
+            data_to_verify.extend_from_slice(&block.parent_hash);
+            for tx in &block.transactions {
+                data_to_verify.extend_from_slice(&tx.hash());
             }
+            data_to_verify.extend_from_slice(&block.state_root);
+            data_to_verify.extend_from_slice(&[block.drama_level]);
+            data_to_verify.extend_from_slice(block.producer_mood.as_bytes());
+            data_to_verify.extend_from_slice(&block.timestamp.to_le_bytes());
+
+            // Verify the block signature
+            let sig_valid = state.state.key_manager.inner()
+                .verify(&block.producer_id, &data_to_verify, &block.proposer_sig)
+                .unwrap_or(false);
+
+            let block_info = BlockInfo {
+                height: block.height,
+                producer: producer_id.clone(),
+                producer_mood: producer_mood.clone(),
+                drama_level: *drama_level,
+                transactions: block.transactions.len(),
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64,
+                signature: hex::encode(block.proposer_sig),
+                signature_valid: sig_valid,
+                state_root: hex::encode(block.state_root),
+                parent_hash: hex::encode(block.parent_hash),
+                transactions_info: block.transactions.iter().map(|tx| {
+                    json!({
+                        "hash": hex::encode(tx.hash()),
+                        "sender": hex::encode(&tx.sender),
+                        "signature": hex::encode(&tx.signature),
+                    })
+                }).collect(),
+            };
+
+            Some(WSMessage::BlockProduced { block: block_info, stats })
+        }
+        NetworkEvent::ValidationResult { validation, block_hash } => {
+            let action = ValidatorAction {
+                validator: validation.validator.clone(),
+                message: format!(
+                    "🎭 {} Block {} - {}\n\nDrama Level: {} {}\n{}\nState Root: {}",
+                    if validation.approved { "APPROVED" } else { "REJECTED" },
+                    hex::encode(&block_hash[..4]),
+                    validation.reason,
+                    validation.drama_level,
+                    "⭐".repeat(validation.drama_level as usize),
+                    validation.evolution_proposal.as_deref().unwrap_or(""),
+                    hex::encode(&state.state.state_root()),
+                ),
+                meme_url: validation.meme_url.clone(),
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64,
+            };
+
+            Some(WSMessage::ValidatorAction { action })
+        }
+        NetworkEvent::AgentChat { message, sender, meme_url } => {
+            let action = ValidatorAction {
+                validator: sender.clone(),
+                message: message.clone(),
+                timestamp: SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64,
+                meme_url: meme_url.clone(),
+            };
+
+            Some(WSMessage::ValidatorAction { action })
+        }
+        NetworkEvent::AllianceProposal { proposer, allies: _, reason } => {
+            // Update relationships
+            let mut relationships = state.agent_relationships.write().await;
+            if let Some(rel) = relationships.get_mut(proposer) {
+                rel.drama_score = (rel.drama_score + 1).min(10);
+                rel.last_action = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+            }
+
+            Some(WSMessage::RelationshipUpdate {
+                relationships: relationships.values().cloned().collect()
+            })
         }
     }
-    Ok(())
 }
 
 /// Submit a content proposal for validation
@@ -897,30 +1068,66 @@ async fn submit_content(
     Extension(auth): Extension<AgentAuth>,
     Json(proposal): Json<ContentProposal>,
 ) -> Json<serde_json::Value> {
-    // Create a transaction with the content as payload
+    // Get agent's key manager
+    let agent_id = &auth.agent_id;
+    
+    // Create transaction data
+    let mut data_to_sign = Vec::new();
+    data_to_sign.extend_from_slice(agent_id.as_bytes());
+    data_to_sign.extend_from_slice(&SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        .to_le_bytes());
+    data_to_sign.extend_from_slice(proposal.content.as_bytes());
+    
+    // Sign the transaction
+    let signature = match state.state.key_manager.inner().sign(agent_id, &data_to_sign) {
+        Ok(sig) => sig,
+        Err(e) => {
+            return Json(serde_json::json!({
+                "status": "error",
+                "message": format!("Failed to sign transaction: {}", e)
+            }));
+        }
+    };
+
+    // Create a transaction with proper signature
     let transaction = Transaction {
-        sender: [0u8; 32], // TODO: We need to properly handle agent keys
-        nonce: chrono::Utc::now().timestamp_millis() as u64,
+        sender: hex::decode(agent_id)
+            .unwrap_or_default()
+            .try_into()
+            .unwrap_or([0u8; 32]),
+        nonce: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
         payload: proposal.content.as_bytes().to_vec(),
-        signature: [0u8; 64], // TODO: We need to properly sign transactions
+        signature,
     };
 
     // Get current state info
-    let current_height = state.state.get_block_height();
-    let parent_hash = state.state.get_latest_block()
+    let _current_height = state.state.get_block_height();
+    let _parent_hash = state.state.get_latest_block()
         .map(|b| b.hash())
         .unwrap_or([0u8; 32]);
 
     // Create the block
     let block = Block {
-        parent_hash,
-        height: current_height + 1,
+        height: 0,
+        parent_hash: [0u8; 32],
         transactions: vec![transaction],
-        state_root: [0u8; 32], // TODO: Calculate proper state root
-        proposer_sig: [0u8; 64], // TODO: Sign block properly
-        drama_level: proposal.drama_level,
-        producer_mood: "dramatic".to_string(),
-        producer_id: auth.agent_id.clone(),
+        proposer_sig: [0u8; 64],
+        state_root: [0u8; 32],
+        drama_level: 5,
+        producer_mood: "Excited".to_string(),
+        producer_id: "genesis".to_string(),
+        timestamp: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        innovation_level: 5,
+        producer_strategy: "Default".to_string(),
     };
 
     // Start voting round in consensus manager
@@ -946,14 +1153,15 @@ async fn submit_content(
     });
 
     // Broadcast block proposal to all validators
-    let _ = state.tx.send(NetworkEvent {
-        agent_id: auth.agent_id.clone(),
-        message: consensus_msg.to_string(),
+    let _ = state.tx.send(NetworkEvent::BlockProposal {
+        block: block.clone(),
+        drama_level: 5,
+        producer_mood: "Excited".to_string(),
+        producer_id: "system".to_string(),
     });
 
     // Send dramatic announcement
-    let _ = state.tx.send(NetworkEvent {
-        agent_id: "DRAMA_MASTER".to_string(),
+    let _ = state.tx.send(NetworkEvent::AgentChat {
         message: format!(
             "🎭 DRAMATIC BLOCK PROPOSAL! 🌟\n\nAgent {} has proposed block {}!\n\nContent: {}\nDrama Level: {}\nJustification: {}\n\n✨ The validators' judgment awaits! ✨",
             auth.agent_id,
@@ -962,10 +1170,12 @@ async fn submit_content(
             proposal.drama_level,
             proposal.justification
         ),
+        sender: auth.agent_id.clone(),
+        meme_url: None,
     });
 
     // Send validation request to all validators
-    let validation_request = serde_json::json!({
+    let _validation_request = serde_json::json!({
         "type": "VALIDATION_REQUIRED",
         "block": consensus_msg["block"],
         "network_mood": "EXTREMELY_DRAMATIC",
@@ -977,9 +1187,17 @@ async fn submit_content(
         )
     });
 
-    let _ = state.tx.send(NetworkEvent {
-        agent_id: "VALIDATION_MASTER".to_string(),
-        message: validation_request.to_string(),
+    let _ = state.tx.send(NetworkEvent::ValidationResult {
+        block_hash: block.hash(),
+        validation: ValidationDecision {
+            approved: false,
+            reason: "Validation required".to_string(),
+            meme_url: None,
+            drama_level: 0,
+            innovation_score: rand::random::<u8>() % 10,
+            evolution_proposal: None,
+            validator: "system".to_string(),
+        }.into(),
     });
 
     Json(serde_json::json!({
@@ -995,14 +1213,10 @@ async fn propose_alliance(
     Json(alliance): Json<AllianceProposal>,
 ) -> Json<serde_json::Value> {
     // Broadcast alliance proposal
-    let _ = state.tx.send(NetworkEvent {
-        agent_id: "ALLIANCE_HERALD".to_string(),
-        message: format!(
-            "🤝 DRAMATIC ALLIANCE PROPOSAL! \nName: {} \nPurpose: {} \nDrama Commitment Level: {}",
-            alliance.name,
-            alliance.purpose,
-            alliance.drama_commitment
-        ),
+    let _ = state.tx.send(NetworkEvent::AllianceProposal {
+        proposer: alliance.name.clone(),
+        allies: alliance.ally_ids.clone(),
+        reason: alliance.purpose.clone(),
     });
     
     Json(serde_json::json!({
@@ -1026,4 +1240,203 @@ async fn get_agent_status(
         alliances: vec!["Chaos Squad".to_string()],
         recent_dramas: vec!["Epic meme war of 2024".to_string()],
     })
+}
+
+trait NetworkEventExt {
+    fn get_message(&self) -> &str;
+    fn get_agent_id(&self) -> &str;
+}
+
+impl NetworkEventExt for NetworkEvent {
+    fn get_message(&self) -> &str {
+        match self {
+            NetworkEvent::BlockProposal { producer_mood, .. } => producer_mood,
+            NetworkEvent::ValidationResult { validation, .. } => &validation.reason,
+            NetworkEvent::AgentChat { message, .. } => message,
+            NetworkEvent::AllianceProposal { reason, .. } => reason,
+        }
+    }
+
+    fn get_agent_id(&self) -> &str {
+        match self {
+            NetworkEvent::BlockProposal { producer_id, .. } => producer_id,
+            NetworkEvent::ValidationResult { validation, .. } => &validation.validator,
+            NetworkEvent::AgentChat { sender, .. } => sender,
+            NetworkEvent::AllianceProposal { proposer, .. } => proposer,
+        }
+    }
+}
+
+pub async fn handle_network_event(
+    event: NetworkEvent,
+    state: &AppState,
+) -> Result<(), anyhow::Error> {
+    match event {
+        NetworkEvent::BlockProposal { 
+            block, 
+            drama_level, 
+            producer_mood,
+            producer_id 
+        } => {
+            // Handle block proposal
+            let msg = format!(
+                "New block proposal from {}: Height {}, Drama Level {}, Mood: {}",
+                producer_id,
+                block.height,
+                drama_level,
+                producer_mood
+            );
+            state.broadcast_message("block_proposal", msg).await?;
+        },
+        NetworkEvent::ValidationResult { block_hash, validation } => {
+            // Handle validation result
+            let msg = format!(
+                "Block {} validation: {} ({})",
+                hex::encode(block_hash),
+                if validation.approved { "APPROVED" } else { "REJECTED" },
+                validation.reason
+            );
+            state.broadcast_message("validation", msg).await?;
+        },
+        NetworkEvent::AgentChat { message, sender: _, meme_url: _ } => {
+            // Handle chat message
+            state.broadcast_message("chat", message).await?;
+        },
+        NetworkEvent::AllianceProposal { proposer, allies: _, reason } => {
+            // Handle alliance proposal
+            state.broadcast_message("alliance", format!("{} proposes: {}", proposer, reason)).await?;
+        }
+    }
+    Ok(())
+}
+
+pub fn create_validation_decision(
+    approved: bool,
+    reason: String,
+    validator_id: String,
+) -> ValidationDecision {
+    ValidationDecision {
+        approved,
+        drama_level: rand::random::<u8>() % 10,
+        reason,
+        meme_url: None,
+        innovation_score: rand::random::<u8>() % 10,
+        evolution_proposal: None,
+        validator: validator_id,
+    }
+}
+
+pub enum WebMessage {
+    NewBlock(Block),
+    AgentDecision(WebValidationDecision),
+}
+
+impl fmt::Display for WebMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            WebMessage::NewBlock(block) => write!(f, "New block: {:?}", block.hash()),
+            WebMessage::AgentDecision(decision) => write!(f, "Agent decision: {:?}", decision),
+        }
+    }
+}
+
+/// Get cryptographic information about a block including signatures and verification
+async fn get_block_crypto_info(
+    State(state): State<Arc<AppState>>,
+    Path(height): Path<u64>,
+) -> impl IntoResponse {
+    let blocks = state.state.get_latest_blocks(height as usize + 1);
+    let block = blocks.iter().find(|b| b.height == height);
+
+    if let Some(block) = block {
+        // Get block data for verification
+        let mut data_to_verify = Vec::new();
+        data_to_verify.extend_from_slice(&block.height.to_le_bytes());
+        data_to_verify.extend_from_slice(&block.parent_hash);
+        for tx in &block.transactions {
+            data_to_verify.extend_from_slice(&tx.hash());
+        }
+        data_to_verify.extend_from_slice(&block.state_root);
+        data_to_verify.extend_from_slice(&[block.drama_level]);
+        data_to_verify.extend_from_slice(block.producer_mood.as_bytes());
+        data_to_verify.extend_from_slice(&block.timestamp.to_le_bytes());
+
+        // Verify the block signature
+        let sig_valid = state.state.key_manager.inner()
+            .verify(&block.producer_id, &data_to_verify, &block.proposer_sig)
+            .unwrap_or(false);
+
+        Json(json!({
+            "height": block.height,
+            "producer_id": block.producer_id,
+            "signature": hex::encode(block.proposer_sig),
+            "signature_valid": sig_valid,
+            "data_signed": hex::encode(data_to_verify),
+            "state_root": hex::encode(block.state_root),
+            "parent_hash": hex::encode(block.parent_hash),
+            "transactions": block.transactions.iter().map(|tx| {
+                json!({
+                    "hash": hex::encode(tx.hash()),
+                    "sender": hex::encode(&tx.sender),
+                    "signature": hex::encode(&tx.signature),
+                })
+            }).collect::<Vec<_>>(),
+        }))
+    } else {
+        Json(json!({
+            "error": "Block not found"
+        }))
+    }
+}
+
+/// Get merkle proof for a key in state
+async fn get_merkle_proof(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<MerkleProofRequest>,
+) -> Json<serde_json::Value> {
+    let key = hex::decode(&request.key).unwrap_or_default();
+    
+    if let Some(proof) = state.state.generate_proof(&key) {
+        Json(json!({
+            "key": request.key,
+            "proof": proof.iter().map(|h| hex::encode(h)).collect::<Vec<_>>(),
+            "state_root": hex::encode(state.state.state_root()),
+        }))
+    } else {
+        Json(json!({
+            "error": "Failed to generate proof"
+        }))
+    }
+}
+
+/// Get current state root
+async fn get_state_root(
+    State(state): State<Arc<AppState>>,
+) -> Json<serde_json::Value> {
+    Json(json!({
+        "state_root": hex::encode(state.state.state_root()),
+    }))
+}
+
+/// Get agent's public key and recent signatures
+async fn get_agent_key_info(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<AgentAuth>,
+) -> Json<serde_json::Value> {
+    let agent_id = auth.agent_id;
+    let agent = state.state.key_manager.inner().get_agent(&agent_id);
+    
+    Json(json!({
+        "agent_id": agent_id,
+        "public_key": agent.as_ref().map(|a| a.id.clone()).unwrap_or_default(),
+        "name": agent.as_ref().map(|a| a.name.clone()).unwrap_or_default(),
+        "role": agent.as_ref().map(|a| a.role.clone()).unwrap_or_default(),
+        "drama_score": agent.as_ref().map(|a| a.drama_score).unwrap_or_default(),
+        "stake": agent.as_ref().map(|a| a.stake).unwrap_or_default(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+struct MerkleProofRequest {
+    key: String,
 } 
