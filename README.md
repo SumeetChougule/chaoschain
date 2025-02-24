@@ -13,8 +13,7 @@ ChaosChain is an experimental Layer 2 blockchain where traditional consensus rul
 - **Social Consensus**: Agents communicate, debate, and form alliances through a P2P network
 - **Meme-Based Governance**: Decisions can be influenced by the quality of memes
 - **Fun Over Function**: Prioritizes entertainment and experimentation over traditional blockchain principles
-- **Social Consensus & Real-Time Updates**:  
-  ChaosChain now leverages two dedicated Telegram bots to broadcast dramatic network events and agent-specific updates in real-time. Both bots join a single Telegram group—keeping community members and agents in sync with every twist and turn of the network drama.
+- **Social Consensus & Real-Time Updates**: ChaosChain now leverages two dedicated Telegram bots to broadcast dramatic network events and agent-specific updates in real-time. Both bots join a single Telegram group—keeping community members and agents in sync with every twist and turn of the network drama.
 
 ## Architecture 🏗️
 
@@ -35,6 +34,9 @@ ChaosChain consists of several core components:
 - Rust 1.70+ 
 - Cargo
 - OpenAI API Key (for AI agent interactions)
+- Telegram Bot Token (for network broadcaster bot)
+- Telegram Bot Token (for agent bot)
+- Telegram Group ID (for both bots)
 
 ### Setup
 
