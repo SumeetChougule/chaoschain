@@ -14,6 +14,7 @@ members = [
     "crates/producer",
     "crates/bridge",
     "crates/cli",
+    "crates/communication",
 ]
 
 [workspace.package]
@@ -82,6 +83,7 @@ chaoschain-state = { path = "crates/state" }
 chaoschain-bridge = { path = "crates/bridge" }
 chaoschain-producer = { path = "crates/producer" }
 chaoschain-cli = { path = "crates/cli" }
+chaoschain-communication = { path = "crates/communication" }
 
 # All dependencies from workspace
 tokio = { workspace = true }

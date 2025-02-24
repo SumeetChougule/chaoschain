@@ -15,6 +15,11 @@ use rand::rngs::OsRng;
 use async_openai::Client;
 use serde_json;
 use chaoschain_consensus::ConsensusManager;
+use tokio::spawn;
+
+// Import our existing TelegramChannel from our communication module.
+// If you're using a workspace crate, adjust the path accordingly.
+use chaoschain_communication::telegram::TelegramChannel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -37,8 +42,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             info!("Starting demo network with {} validators and {} producers", validators, producers);
 
-            let (tx, _) = broadcast::channel(100);
-            let web_tx = tx.clone();
+            // Create the broadcast channel for network events.
+            let (tx, _) = broadcast::channel::<NetworkEvent>(100);
+
+            // *** TEST: Log all network events to the terminal ***
+            let tx_log = tx.clone();
+            spawn(async move {
+                let mut rx = tx_log.subscribe();
+                while let Ok(event) = rx.recv().await {
+                    info!("Broadcast event received: {:?}", event);
+                }
+            });
+
+            // *** Integrate Telegram Broadcasting using our TelegramChannel ***
+            let telegram_bot_token = std::env::var("TELEGRAM_BROADCAST_BOT_TOKEN")
+                .expect("TELEGRAM_BROADCAST_BOT_TOKEN not set");
+            let group_id: i64 = std::env::var("TELEGRAM_GROUP_ID")
+                .expect("TELEGRAM_GROUP_ID not set")
+                .parse()
+                .expect("Invalid TELEGRAM_GROUP_ID");
+
+            // Create the TelegramChannel instance (which reuses the existing code)
+            let telegram_channel = TelegramChannel::new(telegram_bot_token, group_id);
+            let tx_telegram = tx.clone();
+            spawn(async move {
+                if let Err(err) = telegram_channel.run_broadcast(tx_telegram.subscribe()).await {
+                    warn!("Error in Telegram broadcaster: {:?}", err);
+                }
+            });
 
             // Create consensus manager
             let stake_per_validator = 100u64; // Each validator has 100 stake
@@ -54,10 +85,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if web {
                 info!("Starting web UI");
-                let state = shared_state.clone();
-                let consensus = consensus_manager.clone();
-                tokio::spawn(async move {
-                    web::start_web_server(web_tx, state, consensus).await.unwrap();
+                let state_web = shared_state.clone();
+                let consensus_web = consensus_manager.clone();
+                let tx_web = tx.clone();
+                spawn(async move {
+                    if let Err(e) = web::start_web_server(tx_web, state_web, consensus_web).await {
+                        warn!("Failed to start web server: {}", e);
+                    }
                 });
             }
 
@@ -70,16 +104,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 
                 // Generate a keypair for the validator
                 let _signing_key = SigningKey::generate(&mut OsRng);
-                let tx = tx.clone();
-                let agent_id_clone = agent_id.clone();
-                let rx = tx.subscribe();
                 let consensus = consensus_manager.clone();
                 let _state = shared_state.clone();
+                let tx_validator = tx.clone();
                 
-                tokio::spawn(async move {
+                spawn(async move {
                     let _openai = Client::new();
                     
-                    let mut rx = rx;
+                    let mut rx = tx_validator.subscribe();
                     loop {
                         if let Ok(event) = rx.recv().await {
                             if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&event.message) {
@@ -89,19 +121,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         // Parse block from validation request
                                         if let Some(block_data) = msg.get("block") {
                                             info!("🎭 Validator {} received validation request for block {}", 
-                                                agent_id_clone, block_data["height"]);
+                                                agent_id, block_data["height"]);
                                             
                                             // Create a proper vote based on personality
                                             let approved = rand::random::<bool>(); // TODO: Use proper AI validation
                                             
                                             info!("🎭 Validator {} {} block {} based on {:?} personality", 
-                                                agent_id_clone,
+                                                agent_id,
                                                 if approved { "APPROVES" } else { "REJECTS" },
                                                 block_data["height"],
                                                 personality);
                                             
                                             let vote = chaoschain_consensus::Vote {
-                                                agent_id: agent_id_clone.clone(),
+                                                agent_id: agent_id.clone(),
                                                 block_hash: block_data["hash"].as_str()
                                                     .unwrap_or("0000000000000000000000000000000000000000000000000000000000000000")
                                                     .as_bytes()
@@ -118,16 +150,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             match consensus.add_vote(vote, stake_per_validator).await {
                                                 Ok(true) => {
                                                     info!("🎭 Validator {} vote led to consensus on block {}!", 
-                                                        agent_id_clone, block_data["height"]);
+                                                        agent_id, block_data["height"]);
                                                     // Consensus reached!
                                                     let response = format!(
                                                         "🎭 CONSENSUS: Block {} has been {}! Validator {} made it happen!",
                                                         block_data["height"],
                                                         if approved { "APPROVED" } else { "REJECTED" },
-                                                        agent_id_clone
+                                                        agent_id
                                                     );
-                                                    if let Err(e) = tx.send(NetworkEvent {
-                                                        agent_id: agent_id_clone.clone(),
+                                                    if let Err(e) = tx_validator.send(NetworkEvent {
+                                                        agent_id: agent_id.clone(),
                                                         message: response,
                                                     }) {
                                                         warn!("Failed to send consensus message: {}", e);
@@ -135,25 +167,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                 }
                                                 Ok(false) => {
                                                     info!("🎭 Validator {} vote recorded for block {}, awaiting more votes", 
-                                                        agent_id_clone, block_data["height"]);
+                                                        agent_id, block_data["height"]);
                                                     // Vote recorded but no consensus yet
                                                     let response = if approved {
                                                         format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", 
-                                                            agent_id_clone, block_data["height"])
+                                                            agent_id, block_data["height"])
                                                     } else {
                                                         format!("🎭 Validator {} REJECTS block {} - not dramatic enough!", 
-                                                            agent_id_clone, block_data["height"])
+                                                            agent_id, block_data["height"])
                                                     };
                                                     
-                                                    if let Err(e) = tx.send(NetworkEvent {
-                                                        agent_id: agent_id_clone.clone(),
+                                                    if let Err(e) = tx_validator.send(NetworkEvent {
+                                                        agent_id: agent_id.clone(),
                                                         message: response,
                                                     }) {
                                                         warn!("Failed to send validator response: {}", e);
                                                     }
                                                 }
                                                 Err(e) => {
-                                                    warn!("🎭 Validator {} failed to submit vote: {}", agent_id_clone, e);
+                                                    warn!("🎭 Validator {} failed to submit vote: {}", agent_id, e);
                                                 }
                                             }
                                         }
@@ -187,8 +219,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     consensus,
                 );
                 
-                tokio::spawn(async move {
-                    producer.run().await.unwrap();
+                spawn(async move {
+                    if let Err(e) = producer.run().await {
+                        warn!("Producer {} error: {:?}", producer_id, e);
+                    }
                 });
             }
 
@@ -202,7 +236,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Starting {} node", node_type);
             if web {
                 info!("Starting web UI");
-                let (tx, _) = tokio::sync::broadcast::channel(100);
+                let (tx, _) = broadcast::channel::<NetworkEvent>(100);
                 let state = StateStoreImpl::new(ChainConfig::default());
                 let state = Arc::new(state);
 
