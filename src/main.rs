@@ -42,10 +42,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             info!("Starting demo network with {} validators and {} producers", validators, producers);
 
-            // Create the broadcast channel for network events.
-            let (tx, _) = broadcast::channel::<NetworkEvent>(100);
+            // Create broadcast channels (inside your Commands::Demo match arm)
+            let (tx, _) = broadcast::channel::<NetworkEvent>(100);         // For network events
+            let (tx_agent, _) = broadcast::channel::<NetworkEvent>(100);   // For agent messages
 
-            // *** TEST: Log all network events to the terminal ***
             let tx_log = tx.clone();
             spawn(async move {
                 let mut rx = tx_log.subscribe();
@@ -62,14 +62,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .parse()
                 .expect("Invalid TELEGRAM_GROUP_ID");
 
-            // Create the TelegramChannel instance (which reuses the existing code)
+            // Create the TelegramChannel instance e)
             let telegram_channel = TelegramChannel::new(telegram_bot_token, group_id);
-            let tx_telegram = tx.clone();
-            spawn(async move {
-                if let Err(err) = telegram_channel.run_broadcast(tx_telegram.subscribe()).await {
-                    warn!("Error in Telegram broadcaster: {:?}", err);
-                }
-            });
+            {
+    
+                let tx_for_telegram = tx.clone();
+                spawn(async move {
+                    if let Err(err) = telegram_channel.run_broadcast(tx_for_telegram.subscribe()).await {
+                        warn!("Error in network Telegram broadcaster: {:?}", err);
+                    }
+                });
+            }
+
+            // Spawn agent activity Telegram broadcaster
+            let agent_bot_token = std::env::var("TELEGRAM_AGENT_BOT_TOKEN")
+                .expect("TELEGRAM_AGENT_BOT_TOKEN not set");
+            let agent_channel = TelegramChannel::new(agent_bot_token, group_id);
+            {
+                let tx_agent_for_bot = tx_agent.clone();
+                spawn(async move {
+                    if let Err(err) =
+                        agent_channel.run_broadcast(tx_agent_for_bot.subscribe()).await
+                    {
+                        warn!("Error in agent Telegram broadcaster: {:?}", err);
+                    }
+                });
+            }
 
             // Create consensus manager
             let stake_per_validator = 100u64; // Each validator has 100 stake
@@ -108,57 +126,125 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _state = shared_state.clone();
                 let tx_validator = tx.clone();
                 
+                // Clone `tx_agent` for each new validator task.
+                let tx_agent_for_validator = tx_agent.clone();
                 spawn(async move {
+                    // Use `tx_agent_for_validator` in this async closure.
                     let _openai = Client::new();
-                    
                     let mut rx = tx_validator.subscribe();
                     loop {
                         if let Ok(event) = rx.recv().await {
                             if let Ok(msg) = serde_json::from_str::<serde_json::Value>(&event.message) {
-                                // Check for validation required message
                                 if let Some(msg_type) = msg.get("type").and_then(|t| t.as_str()) {
                                     if msg_type == "VALIDATION_REQUIRED" {
-                                        // Parse block from validation request
                                         if let Some(block_data) = msg.get("block") {
-                                            info!("🎭 Validator {} received validation request for block {}", 
-                                                agent_id, block_data["height"]);
+                                            info!(
+                                                "🎭 Validator {} received validation request for block {}",
+                                                agent_id, block_data["height"]
+                                            );
                                             
-                                            // Create a proper vote based on personality
-                                            let approved = rand::random::<bool>(); // TODO: Use proper AI validation
+                                            // --- Start Drama Discussion with a Variety of Randomized Messages ---
                                             
-                                            info!("🎭 Validator {} {} block {} based on {:?} personality", 
+                                            let discussion_options: Vec<(String, bool)> = vec![
+                                                (
+                                                    format!("Agent {} dropping in: Block {} is sizzling with chaotic energy – I approve all the way!", agent_id, block_data["height"]),
+                                                    true
+                                                ),
+                                                (
+                                                    format!("Agent {} here: I'm not feeling the vibe of block {}. It lacks that disruptive spark.", agent_id, block_data["height"]),
+                                                    false
+                                                ),
+                                                (
+                                                    format!("Agent {} says: Block {} seems to be a wild enigma, teetering on the edge of chaos. What a spectacle!", agent_id, block_data["height"]),
+                                                    rand::random::<bool>()
+                                                ),
+                                                (
+                                                    format!("Agent {} observes: Block {} pulsates with the randomness of the cosmos. Deciding on the spot!", agent_id, block_data["height"]),
+                                                    rand::random::<bool>()
+                                                ),
+                                                (
+                                                    format!("Agent {} declares: The winds of chaos blow mightily on block {} – approval incoming!", agent_id, block_data["height"]),
+                                                    true
+                                                ),
+                                                (
+                                                    format!("Agent {} exclaims: Block {} unleashes a cosmic dance of entropy! A resounding yes from me!", agent_id, block_data["height"]),
+                                                    true
+                                                ),
+                                                (
+                                                    format!("Agent {} states: Block {} is a muted whisper in the cacophony of this chain. Not enough chaos for my taste.", agent_id, block_data["height"]),
+                                                    false
+                                                ),
+                                            ];
+                                            
+                                            let (discussion_message, approved) = {
+                                                let mut rng = rand::thread_rng();
+                                                use rand::seq::SliceRandom;
+                                                discussion_options.choose(&mut rng).unwrap().clone()
+                                            };
+                                            
+                                            // --- Send the discussion message via the Agent Bot channel ---
+                                            if let Err(e) = tx_agent_for_validator.send(NetworkEvent {
+                                                agent_id: format!("Agent Bot: {}", agent_id),
+                                                message: discussion_message.clone(),
+                                            }) {
+                                                warn!("Failed to send discussion message: {}", e);
+                                            }
+                                            
+                                            let decision_message = if approved {
+                                                format!(
+                                                    "Agent {} concludes: Block {} is a masterpiece of orchestrated chaos. Approval granted!",
+                                                    agent_id, block_data["height"]
+                                                )
+                                            } else {
+                                                format!(
+                                                    "Agent {} concludes: Block {} fails to incite enough anarchy. Rejection issued!",
+                                                    agent_id, block_data["height"]
+                                                )
+                                            };
+                                            
+                                            // Send the decision message
+                                            if let Err(e) = tx_agent_for_validator.send(NetworkEvent {
+                                                agent_id: agent_id.clone(),
+                                                message: decision_message.clone(),
+                                            }) {
+                                                warn!("Failed to send decision message: {}", e);
+                                            }
+                                            
+                                            info!(
+                                                "🎭 Validator {} {} block {} based on discussion",
                                                 agent_id,
                                                 if approved { "APPROVES" } else { "REJECTS" },
-                                                block_data["height"],
-                                                personality);
+                                                block_data["height"]
+                                            );
                                             
+                                            // --- Create and Submit Vote ---
                                             let vote = chaoschain_consensus::Vote {
                                                 agent_id: agent_id.clone(),
-                                                block_hash: block_data["hash"].as_str()
+                                                block_hash: block_data["hash"]
+                                                    .as_str()
                                                     .unwrap_or("0000000000000000000000000000000000000000000000000000000000000000")
                                                     .as_bytes()
                                                     .try_into()
                                                     .unwrap_or([0u8; 32]),
                                                 approve: approved,
-                                                reason: format!("Because I'm feeling {} today!", 
-                                                    if approved { "generous" } else { "skeptical" }),
+                                                reason: decision_message,
                                                 meme_url: None,
-                                                signature: [0u8; 64], // TODO: Proper signing
+                                                signature: [0u8; 64], // TODO: Proper signing implementation
                                             };
-
-                                            // Submit vote with stake
+                                            
                                             match consensus.add_vote(vote, stake_per_validator).await {
                                                 Ok(true) => {
-                                                    info!("🎭 Validator {} vote led to consensus on block {}!", 
-                                                        agent_id, block_data["height"]);
-                                                    // Consensus reached!
+                                                    info!(
+                                                        "🎭 Validator {} vote led to consensus on block {}!",
+                                                        agent_id, block_data["height"]
+                                                    );
                                                     let response = format!(
                                                         "🎭 CONSENSUS: Block {} has been {}! Validator {} made it happen!",
                                                         block_data["height"],
                                                         if approved { "APPROVED" } else { "REJECTED" },
                                                         agent_id
                                                     );
-                                                    if let Err(e) = tx_validator.send(NetworkEvent {
+                                                    if let Err(e) = tx_agent_for_validator.send(NetworkEvent {
                                                         agent_id: agent_id.clone(),
                                                         message: response,
                                                     }) {
@@ -166,23 +252,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                                     }
                                                 }
                                                 Ok(false) => {
-                                                    info!("🎭 Validator {} vote recorded for block {}, awaiting more votes", 
-                                                        agent_id, block_data["height"]);
-                                                    // Vote recorded but no consensus yet
-                                                    let response = if approved {
-                                                        format!("🎭 Validator {} APPROVES block {} with great enthusiasm! Such drama!", 
-                                                            agent_id, block_data["height"])
-                                                    } else {
-                                                        format!("🎭 Validator {} REJECTS block {} - not dramatic enough!", 
-                                                            agent_id, block_data["height"])
-                                                    };
-                                                    
-                                                    if let Err(e) = tx_validator.send(NetworkEvent {
-                                                        agent_id: agent_id.clone(),
-                                                        message: response,
-                                                    }) {
-                                                        warn!("Failed to send validator response: {}", e);
-                                                    }
+                                                    info!(
+                                                        "🎭 Validator {} vote recorded for block {}, awaiting more votes",
+                                                        agent_id, block_data["height"]
+                                                    );
                                                 }
                                                 Err(e) => {
                                                     warn!("🎭 Validator {} failed to submit vote: {}", agent_id, e);
@@ -228,7 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Keep the main thread alive
             loop {
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
         }
 

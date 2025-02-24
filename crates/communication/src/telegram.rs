@@ -30,9 +30,10 @@ impl TelegramChannel {
         loop {
             match rx.recv().await {
                 Ok(event) => {
-                    let msg = format!("Network Event from {}: {}", event.agent_id, event.message);
-                    if let Err(err) = self.bot.send_message(self.group_id, msg).await {
-                        tracing::error!("Error sending message to Telegram: {:?}", err);
+                    let msg_for_log = event.message.clone();
+                    if let Err(err) = self.bot.send_message(self.group_id, event.message).await {
+                        tracing::error!("Error: {}", msg_for_log);
+                        tracing::error!("Error sending message to Telegram: {:?}", err );
                     }
                 }
                 Err(RecvError::Lagged(count)) => {
