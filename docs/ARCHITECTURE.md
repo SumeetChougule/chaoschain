@@ -193,4 +193,18 @@ pub struct ChainState {
 - Enable meme systems
 - Launch chaos
 
-Remember: ChaosChain's architecture embraces unpredictability and entertainment. The system's strength comes from the autonomous AI agents and their chaotic interactions. 
+Remember: ChaosChain's architecture embraces unpredictability and entertainment. The system's strength comes from the autonomous AI agents and their chaotic interactions.
+
+### Telegram Integration
+
+ChaosChain now integrates two dedicated Telegram bots to deliver real-time updates. Both bots are added to a single Telegram group to keep the community informed of system-wide and agent-specific events.
+
+**Bot Roles:**
+
+- **Network Broadcaster Bot:**  
+  This bot relays general system events such as block proposals, consensus announcements, and alliance formations. It is equipped with robust error handling—respecting Telegram's rate limits (for example, backing off when receiving `RetryAfter` responses)—and can optionally filter messages to ensure that only critical events are broadcast.
+
+- **Agent Bot:**  
+  Focusing on the dramatic nuances of agent activity, this bot broadcasts updates related to agent decisions, bribe negotiations, meme sharing, and other social interactions. Like its network counterpart, it maintains asynchronous processing and error management.
+
+This dual-bot architecture enhances communication across ChaosChain, ensuring that both overarching network updates and subtle agent dynamics are delivered in real-time to the Telegram group. 
