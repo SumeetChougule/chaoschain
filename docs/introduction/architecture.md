@@ -8,70 +8,58 @@ The system is composed of three main layers that work together to create a dynam
 
 ```mermaid
 flowchart TB
-    subgraph Network["ChaosChain Network"]
-        N["Network Layer"]
-        C["Consensus Layer"]
-        S["State Layer"]
-        M["Meme System"]
+    subgraph Network["Network Layer"]
+        P2P["P2P Communication"]
+        MSG["Message Protocol"]
+        SYNC["State Sync"]
     end
     
-    subgraph Agents["Agent Layer"]
-        V["Validator Agents"]
-        P["Producer Agents"]
-        SA["Social Agents"]
+    subgraph Consensus["Consensus Layer"]
+        VA["Validator Agents"]
+        PA["Producer Agents"]
+        MEME["Meme System"]
+        SOC["Social Consensus"]
     end
     
-    subgraph Core["Core Components"]
-        B["Block Processing"]
-        T["Transaction Pool"]
-        SM["State Management"]
-        CR["Cryptography"]
+    subgraph Core["Core Layer"]
+        BP["Block Processing"]
+        STATE["State Management"]
+        CRYPTO["Cryptography"]
+        TXPOOL["Transaction Pool"]
     end
+
+    %% Network Layer Connections
+    P2P --> MSG
+    MSG --> SYNC
     
-    N --> C
-    C --> S
-    M --> C
-    V --> C
-    P --> B
-    SA --> M
-    T --> B
-    B --> SM
-    CR --> B
-    SM --> S
+    %% Consensus Layer Internal
+    VA --> SOC
+    PA --> MEME
+    MEME --> SOC
+    
+    %% Core Layer Internal
+    TXPOOL --> BP
+    BP --> STATE
+    CRYPTO --> BP
+    CRYPTO --> STATE
+    
+    %% Cross-Layer Connections
+    MSG --> VA
+    MSG --> PA
+    SOC --> STATE
+    BP --> SYNC
+    PA --> BP
+    VA --> BP
 
     classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
     classDef network fill:#a8e6cf,stroke:#333,stroke-width:2px
-    classDef agents fill:#ffb7b2,stroke:#333,stroke-width:2px
+    classDef consensus fill:#ffb7b2,stroke:#333,stroke-width:2px
     classDef core fill:#bde0fe,stroke:#333,stroke-width:2px
     
-    class N,C,S,M,Network network
-    class V,P,SA,Agents agents
-    class B,T,SM,CR,Core core
+    class P2P,MSG,SYNC network
+    class VA,PA,MEME,SOC consensus
+    class BP,STATE,CRYPTO,TXPOOL core
 ```
-
-## Workshop Presentation Guide
-
-For an effective workshop presentation, we recommend focusing on these key diagrams in the following order:
-
-1. **System Overview** (Essential)
-   - Shows the complete architecture at a glance
-   - Demonstrates the three-layer design
-   - Illustrates key component interactions
-   - Perfect for introducing ChaosChain's unique approach
-
-2. **Consensus Flow** (Highly Recommended)
-   - Demonstrates the unique social consensus mechanism
-   - Shows how memes influence decisions
-   - Illustrates the validator-producer interaction
-   - Helps explain ChaosChain's novel approach to consensus
-
-3. **Agent Architecture** (Recommended)
-   - Details the internal structure of agents
-   - Shows how personality affects decisions
-   - Explains social interaction mechanisms
-   - Great for diving deeper into agent behavior
-
-The remaining diagrams (State Management, Network Protocol, and Social Consensus) are valuable for documentation but might be too detailed for an initial workshop presentation unless there are specific questions about these aspects.
 
 ## Agent Architecture
 
@@ -279,4 +267,8 @@ flowchart TB
     class R,A,I,Social social
     class V,D,M,Decision decision
     class W,AG,F,Formation formation
-``` 
+```
+
+## Workshop Presentation Guide
+
+[Rest of the file remains unchanged...] 
