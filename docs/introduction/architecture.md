@@ -10,46 +10,78 @@ The system is composed of three main layers that work together to create a dynam
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial', 'primaryColor': '#6c5ce7', 'primaryTextColor': '#fff' }}}%%
 flowchart TB
     subgraph Network["ChaosChain Network"]
+        direction TB
         N["Network Layer"]
         C["Consensus Layer"]
         S["State Layer"]
         M["Meme System"]
+        
+        N --> C
+        C --> S
+        M --> C
     end
     
     subgraph Agents["Agent Layer"]
+        direction TB
         V["Validator Agents"]
         P["Producer Agents"]
         SA["Social Agents"]
+        
+        V --> P
+        P --> SA
     end
     
     subgraph Core["Core Components"]
+        direction TB
         B["Block Processing"]
         T["Transaction Pool"]
         SM["State Management"]
         CR["Cryptography"]
+        
+        T --> B
+        B --> SM
+        CR --> B
     end
     
+    % Inter-layer connections
     V --> C
     P --> B
     SA --> M
-    B --> S
-    T --> B
-    C --> S
-    M --> C
     SM --> S
-    CR --> N
 
     classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
     classDef network fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef consensus fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef state fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef meme fill:#ffaaa5,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef agents fill:#ffb7b2,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef core fill:#bde0fe,stroke:#333,stroke-width:2px,rx:5,ry:5
     
-    class N,Network network
-    class C,Consensus consensus
-    class S,State state
-    class M,Meme meme
+    class N,C,S,M,Network network
+    class V,P,SA,Agents agents
+    class B,T,SM,CR,Core core
 ```
+
+## Workshop Presentation Guide
+
+For an effective workshop presentation, we recommend focusing on these key diagrams in the following order:
+
+1. **System Overview** (Essential)
+   - Shows the complete architecture at a glance
+   - Demonstrates the three-layer design
+   - Illustrates key component interactions
+   - Perfect for introducing ChaosChain's unique approach
+
+2. **Consensus Flow** (Highly Recommended)
+   - Demonstrates the unique social consensus mechanism
+   - Shows how memes influence decisions
+   - Illustrates the validator-producer interaction
+   - Helps explain ChaosChain's novel approach to consensus
+
+3. **Agent Architecture** (Recommended)
+   - Details the internal structure of agents
+   - Shows how personality affects decisions
+   - Explains social interaction mechanisms
+   - Great for diving deeper into agent behavior
+
+The remaining diagrams (State Management, Network Protocol, and Social Consensus) are valuable for documentation but might be too detailed for an initial workshop presentation unless there are specific questions about these aspects.
 
 ## Agent Architecture
 
