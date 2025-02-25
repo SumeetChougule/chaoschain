@@ -8,57 +8,72 @@ The system is composed of three main layers that work together to create a dynam
 
 ```mermaid
 flowchart TB
-    subgraph Network["Network Layer"]
-        P2P["P2P Communication"]
-        MSG["Message Protocol"]
-        SYNC["State Sync"]
-    end
-    
-    subgraph Consensus["Consensus Layer"]
-        VA["Validator Agents"]
-        PA["Producer Agents"]
-        MEME["Meme System"]
-        SOC["Social Consensus"]
-    end
-    
-    subgraph Core["Core Layer"]
-        BP["Block Processing"]
-        STATE["State Management"]
-        CRYPTO["Cryptography"]
-        TXPOOL["Transaction Pool"]
+    subgraph Agents["AI Agents"]
+        direction TB
+        V["Validator Agents"]
+        P["Producer Agents"]
+        S["Social Agents"]
     end
 
-    %% Network Layer Connections
-    P2P --> MSG
-    MSG --> SYNC
-    
-    %% Consensus Layer Internal
-    VA --> SOC
-    PA --> MEME
-    MEME --> SOC
-    
-    %% Core Layer Internal
-    TXPOOL --> BP
-    BP --> STATE
-    CRYPTO --> BP
-    CRYPTO --> STATE
-    
-    %% Cross-Layer Connections
-    MSG --> VA
-    MSG --> PA
-    SOC --> STATE
-    BP --> SYNC
-    PA --> BP
-    VA --> BP
+    subgraph Consensus["Social Consensus"]
+        direction TB
+        M["Meme System"]
+        R["Relationships"]
+        A["Alliances"]
+        D["Decision Making"]
+    end
+
+    subgraph Chain["Blockchain Core"]
+        direction TB
+        B["Block Processing"]
+        T["Transaction Pool"]
+        ST["State Management"]
+        C["Cryptography"]
+    end
+
+    subgraph Network["P2P Network"]
+        direction TB
+        COM["Communication"]
+        SYNC["Synchronization"]
+        PEER["Peer Discovery"]
+    end
+
+    %% Agent Interactions
+    V --> D
+    P --> M
+    S --> R
+    S --> A
+
+    %% Consensus Formation
+    M --> D
+    R --> D
+    A --> D
+
+    %% Core Operations
+    D --> B
+    P --> B
+    T --> B
+    B --> ST
+    C --> B
+    C --> ST
+
+    %% Network Operations
+    COM --> V
+    COM --> P
+    COM --> S
+    B --> SYNC
+    ST --> SYNC
 
     classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
-    classDef network fill:#a8e6cf,stroke:#333,stroke-width:2px
-    classDef consensus fill:#ffb7b2,stroke:#333,stroke-width:2px
-    classDef core fill:#bde0fe,stroke:#333,stroke-width:2px
-    
-    class P2P,MSG,SYNC network
-    class VA,PA,MEME,SOC consensus
-    class BP,STATE,CRYPTO,TXPOOL core
+    classDef agents fill:#ffafcc,stroke:#333,stroke-width:2px
+    classDef consensus fill:#bde0fe,stroke:#333,stroke-width:2px
+    classDef chain fill:#a2d2ff,stroke:#333,stroke-width:2px
+    classDef network fill:#cdb4db,stroke:#333,stroke-width:2px
+
+    class V,P,S agents
+    class M,R,A,D consensus
+    class B,T,ST,C chain
+    class COM,SYNC,PEER network
 ```
 
 ## Agent Architecture
