@@ -112,14 +112,12 @@ sequenceDiagram
     participant Producer
     participant Network
     participant Validators
-    participant MemeSystem
     participant State
 
     Producer->>Network: Propose Block
     Note over Network: Block broadcast to network
     Network->>Validators: Distribute Block
-    Note over Validators,MemeSystem: Evaluate block content
-    Validators->>MemeSystem: Analyze memes
+    Note over Validators: Evaluate block content
     Note over Validators: Form social consensus
     Validators->>Validators: Social interaction
     Note over Validators,Network: Submit decisions
