@@ -7,7 +7,7 @@ ChaosChain implements a novel blockchain architecture that combines AI agents, s
 The system is composed of three main layers that work together to create a dynamic and adaptive blockchain network.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial', 'primaryColor': '#6c5ce7', 'primaryTextColor': '#fff' }}}%%
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial', 'primaryColor': '#6c5ce7', 'primaryTextColor': '#000' }}}%%
 flowchart TB
     subgraph Network["ChaosChain Network"]
         N["Network Layer"]
@@ -39,10 +39,10 @@ flowchart TB
     SM --> S
     CR --> N
 
-    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef network fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,rx:5,ry:5
-    classDef agents fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,rx:5,ry:5
-    classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,rx:5,ry:5
+    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5,color:#000
+    classDef network fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,rx:5,ry:5,color:#000
+    classDef agents fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,rx:5,ry:5,color:#000
+    classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,rx:5,ry:5,color:#000
     
     class N,C,S,M,Network network
     class V,P,SA,Agents agents
