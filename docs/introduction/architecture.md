@@ -8,72 +8,64 @@ The system is composed of three main layers that work together to create a dynam
 
 ```mermaid
 flowchart TB
-    subgraph Agents["AI Agents"]
-        direction TB
+    subgraph Network["ChaosChain Network"]
+        N["Network Layer"]
+        C["Consensus Layer"]
+        S["State Layer"]
+        M["Meme System"]
+    end
+    
+    subgraph Agents["Agent Layer"]
         V["Validator Agents"]
         P["Producer Agents"]
-        S["Social Agents"]
+        SA["Social Agents"]
     end
-
-    subgraph Consensus["Social Consensus"]
-        direction TB
-        M["Meme System"]
-        R["Relationships"]
-        A["Alliances"]
-        D["Decision Making"]
-    end
-
-    subgraph Chain["Blockchain Core"]
-        direction TB
+    
+    subgraph Core["Core Components"]
         B["Block Processing"]
         T["Transaction Pool"]
-        ST["State Management"]
-        C["Cryptography"]
+        SM["State Management"]
+        CR["Cryptography"]
     end
-
-    subgraph Network["P2P Network"]
-        direction TB
-        COM["Communication"]
-        SYNC["Synchronization"]
-        PEER["Peer Discovery"]
-    end
-
-    %% Agent Interactions
-    V --> D
-    P --> M
-    S --> R
-    S --> A
-
-    %% Consensus Formation
-    M --> D
-    R --> D
-    A --> D
-
-    %% Core Operations
-    D --> B
+    
+    %% Main Layer Interactions
+    V --> C
     P --> B
+    SA --> M
+    B --> S
     T --> B
-    B --> ST
-    C --> B
-    C --> ST
+    C --> S
+    M --> C
+    SM --> S
+    CR --> B
+    CR --> S
 
-    %% Network Operations
-    COM --> V
-    COM --> P
-    COM --> S
-    B --> SYNC
-    ST --> SYNC
+    %% Cross-Layer Communication
+    N --> V
+    N --> P
+    N --> SA
+    
+    %% State Management
+    B --> SM
+    C --> SM
+    M --> SM
 
     classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
-    classDef agents fill:#ffafcc,stroke:#333,stroke-width:2px
-    classDef consensus fill:#bde0fe,stroke:#333,stroke-width:2px
-    classDef chain fill:#a2d2ff,stroke:#333,stroke-width:2px
-    classDef network fill:#cdb4db,stroke:#333,stroke-width:2px
-
-    class V,P,S agents
-    class M,R,A,D consensus
-    class B,T,ST,C chain
-    class COM,SYNC,PEER network
+    classDef network fill:#f9f,stroke:#333,stroke-width:2px
+    classDef consensus fill:#bbf,stroke:#333,stroke-width:2px
+    classDef state fill:#bfb,stroke:#333,stroke-width:2px
+    classDef meme fill:#fbb,stroke:#333,stroke-width:2px
+    classDef validator fill:#ff9,stroke:#333,stroke-width:2px
+    classDef producer fill:#f9f,stroke:#333,stroke-width:2px
+    classDef social fill:#bff,stroke:#333,stroke-width:2px
+    
+    class N network
+    class C consensus
+    class S state
+    class M meme
+    class V validator
+    class P producer
+    class SA social
 ```
 
 ## Agent Architecture
