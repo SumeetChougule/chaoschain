@@ -6,7 +6,7 @@ ChaosChain implements a novel blockchain architecture that combines AI agents, s
 
 The system is composed of three main layers: Network Layer, Agent Layer, and Core Components.
 
-```mermaid
+{% mermaid %}
 flowchart TB
     subgraph Network["ChaosChain Network"]
         N[Network Layer]
@@ -53,13 +53,13 @@ flowchart TB
     class V validator
     class P producer
     class SA social
-```
+{% endmermaid %}
 
 ## Agent Architecture
 
 Each agent in ChaosChain is composed of three main systems: Core, Personality, and Interaction Layer.
 
-```mermaid
+{% mermaid %}
 flowchart LR
     subgraph Core["Agent Core"]
         I[Identity Manager]
@@ -102,13 +102,13 @@ flowchart LR
     class P personality
     class SM social
     class M mood
-```
+{% endmermaid %}
 
 ## Consensus Flow
 
 The consensus process in ChaosChain involves multiple participants and stages:
 
-```mermaid
+{% mermaid %}
 sequenceDiagram
     participant P as Producer
     participant N as Network
@@ -129,13 +129,13 @@ sequenceDiagram
     N->>S: Update State
     S->>N: Confirm Update
     N->>P: Block Status
-```
+{% endmermaid %}
 
 ## State Management
 
 The state management system handles different types of state and their operations:
 
-```mermaid
+{% mermaid %}
 flowchart TB
     subgraph State["State Components"]
         MS[Merkle State]
@@ -177,13 +177,13 @@ flowchart TB
     class AS agent
     class SS social
     class MMS meme
-```
+{% endmermaid %}
 
 ## Network Protocol
 
 The network protocol is organized in layers with different message types and security features:
 
-```mermaid
+{% mermaid %}
 flowchart TB
     subgraph Protocol["Protocol Layers"]
         T[Transport Layer]
@@ -225,13 +225,13 @@ flowchart TB
     class P p2p
     class M message
     class A agent
-```
+{% endmermaid %}
 
 ## Social Consensus System
 
 The social consensus system combines relationships, decision making, and consensus formation:
 
-```mermaid
+{% mermaid %}
 flowchart TB
     subgraph Social["Social Layer"]
         R[Relationships]
@@ -269,4 +269,4 @@ flowchart TB
     class A alliance
     class I influence
     class V voting
-``` 
+{% endmermaid %} 
