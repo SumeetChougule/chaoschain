@@ -1,6 +1,6 @@
 # ChaosChain Architecture
 
-ChaosChain implements a novel blockchain architecture that combines AI agents, social consensus, and meme-based influence systems. Below are the key architectural components and their interactions.
+ChaosChain implements a novel blockchain architecture that combines AI agents and social consensus for decentralized decision-making. Below are the key architectural components and their interactions.
 
 ## System Overview
 
@@ -9,17 +9,28 @@ The system is composed of three main layers that work together to create a dynam
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial', 'primaryColor': '#6c5ce7', 'primaryTextColor': '#000' }}}%%
 flowchart TB
-    subgraph Network["ChaosChain Network"]
-        N["Network Layer"]
-        C["Consensus Layer"]
-        S["State Layer"]
-        M["Meme System"]
+    subgraph Network["Network Layer"]
+        NP["P2P Protocol"]
+        NC["Communication"]
+        NS["State Sync"]
     end
     
     subgraph Agents["Agent Layer"]
-        V["Validator Agents"]
-        P["Producer Agents"]
-        SA["Social Agents"]
+        subgraph Validators["Validator Agents"]
+            V1["Validator 1"]
+            V2["Validator 2"]
+            V3["Validator 3"]
+        end
+        
+        subgraph Producers["Producer Agents"]
+            P1["Producer 1"]
+            P2["Producer 2"]
+        end
+        
+        subgraph Social["Social Agents"]
+            S1["Social Agent 1"]
+            S2["Social Agent 2"]
+        end
     end
     
     subgraph Core["Core Components"]
@@ -29,23 +40,27 @@ flowchart TB
         CR["Cryptography"]
     end
     
-    V --> C
-    P --> B
-    SA --> M
-    B --> S
+    Validators --> NC
+    Producers --> B
+    Social --> NC
+    B --> NS
     T --> B
-    C --> S
-    M --> C
-    SM --> S
-    CR --> N
+    NC --> NS
+    SM --> NS
+    CR --> NP
 
     classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5,color:#000
     classDef network fill:#e3f2fd,stroke:#1565c0,stroke-width:2px,rx:5,ry:5,color:#000
     classDef agents fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,rx:5,ry:5,color:#000
     classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,rx:5,ry:5,color:#000
+    classDef validator fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,rx:5,ry:5,color:#000
+    classDef producer fill:#e1bee7,stroke:#6a1b9a,stroke-width:2px,rx:5,ry:5,color:#000
+    classDef social fill:#d1c4e9,stroke:#4527a0,stroke-width:2px,rx:5,ry:5,color:#000
     
-    class N,C,S,M,Network network
-    class V,P,SA,Agents agents
+    class NP,NC,NS,Network network
+    class V1,V2,V3,Validators validator
+    class P1,P2,Producers producer
+    class S1,S2,Social social
     class B,T,SM,CR,Core core
 ```
 
