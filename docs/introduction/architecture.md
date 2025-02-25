@@ -36,6 +36,8 @@ flowchart TB
     end
     
     Validators --> NC
+    Validators --> T
+    Producers --> T
     Producers --> B
     B --> NS
     T --> B
