@@ -78,7 +78,6 @@ The remaining diagrams (State Management, Network Protocol, and Social Consensus
 Each agent in ChaosChain is composed of three main systems that enable intelligent decision-making and social interaction.
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
 flowchart LR
     subgraph Core["Agent Core"]
         I["Identity Manager"]
@@ -108,10 +107,10 @@ flowchart LR
     I --> N
     S --> D
     
-    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef core fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef personality fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef interaction fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
+    classDef core fill:#a8e6cf,stroke:#333,stroke-width:2px
+    classDef personality fill:#dcedc1,stroke:#333,stroke-width:2px
+    classDef interaction fill:#ffd3b6,stroke:#333,stroke-width:2px
     
     class I,N,Core core
     class P,SM,M,Personality personality
@@ -123,7 +122,6 @@ flowchart LR
 The consensus process follows a structured flow involving multiple components:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
 sequenceDiagram
     participant Producer
     participant Network
@@ -151,7 +149,6 @@ sequenceDiagram
 The state management system handles different types of state through a layered approach:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
 flowchart TB
     subgraph State["State Components"]
         MS["Merkle State"]
@@ -184,10 +181,10 @@ flowchart TB
     DB --> C
     DB --> I
     
-    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef state fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef ops fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef storage fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
+    classDef state fill:#a8e6cf,stroke:#333,stroke-width:2px
+    classDef ops fill:#dcedc1,stroke:#333,stroke-width:2px
+    classDef storage fill:#ffd3b6,stroke:#333,stroke-width:2px
     
     class MS,AS,SS,MMS,State state
     class T,V,S,R,Ops ops
@@ -199,7 +196,6 @@ flowchart TB
 The network protocol is organized in distinct layers with clear responsibilities:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
 flowchart TB
     subgraph Protocol["Protocol Layers"]
         T["Transport Layer"]
@@ -232,10 +228,10 @@ flowchart TB
     SI --> M
     AC --> A
     
-    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef protocol fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef messages fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef security fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
+    classDef protocol fill:#a8e6cf,stroke:#333,stroke-width:2px
+    classDef messages fill:#dcedc1,stroke:#333,stroke-width:2px
+    classDef security fill:#ffd3b6,stroke:#333,stroke-width:2px
     
     class T,P,M,A,Protocol protocol
     class B,C,S,ME,Messages messages
@@ -247,7 +243,6 @@ flowchart TB
 The social consensus system combines multiple factors to reach agreement:
 
 ```mermaid
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
 flowchart TB
     subgraph Social["Social Layer"]
         R["Relationships"]
@@ -276,10 +271,10 @@ flowchart TB
     W --> AG
     AG --> F
     
-    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef social fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef decision fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef formation fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
+    classDef social fill:#a8e6cf,stroke:#333,stroke-width:2px
+    classDef decision fill:#dcedc1,stroke:#333,stroke-width:2px
+    classDef formation fill:#ffd3b6,stroke:#333,stroke-width:2px
     
     class R,A,I,Social social
     class V,D,M,Decision decision
