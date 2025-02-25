@@ -6,29 +6,29 @@ ChaosChain implements a novel blockchain architecture that combines AI agents, s
 
 The system is composed of three main layers that work together to create a dynamic and adaptive blockchain network.
 
+
 ```mermaid
 flowchart TB
     subgraph Network["ChaosChain Network"]
-        N["Network Layer"]
-        C["Consensus Layer"]
-        S["State Layer"]
-        M["Meme System"]
+        N[Network Layer]
+        C[Consensus Layer]
+        S[State Layer]
+        M[Meme System]
     end
     
     subgraph Agents["Agent Layer"]
-        V["Validator Agents"]
-        P["Producer Agents"]
-        SA["Social Agents"]
+        V[Validator Agents]
+        P[Producer Agents]
+        SA[Social Agents]
     end
     
     subgraph Core["Core Components"]
-        B["Block Processing"]
-        T["Transaction Pool"]
-        SM["State Management"]
-        CR["Cryptography"]
+        B[Block Processing]
+        T[Transaction Pool]
+        SM[State Management]
+        CR[Cryptography]
     end
     
-    %% Main Layer Interactions
     V --> C
     P --> B
     SA --> M
@@ -37,20 +37,8 @@ flowchart TB
     C --> S
     M --> C
     SM --> S
-    CR --> B
-    CR --> S
+    CR --> N
 
-    %% Cross-Layer Communication
-    N --> V
-    N --> P
-    N --> SA
-    
-    %% State Management
-    B --> SM
-    C --> SM
-    M --> SM
-
-    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px
     classDef network fill:#f9f,stroke:#333,stroke-width:2px
     classDef consensus fill:#bbf,stroke:#333,stroke-width:2px
     classDef state fill:#bfb,stroke:#333,stroke-width:2px
