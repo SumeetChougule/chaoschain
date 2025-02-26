@@ -79,7 +79,6 @@ flowchart LR
     subgraph Interaction["Interaction Layer"]
         N["Network Interface"]
         C["Consensus Voting"]
-        MS["Meme System"]
         A["Alliance Manager"]
     end
     
@@ -87,7 +86,6 @@ flowchart LR
     SM --> D
     M --> D
     D --> C
-    D --> MS
     D --> A
     I --> N
     S --> D
@@ -99,7 +97,7 @@ flowchart LR
     
     class I,N,Core core
     class P,SM,M,Personality personality
-    class C,MS,A,Interaction interaction
+    class C,A,Interaction interaction
 ```
 
 ## Consensus Flow
@@ -139,7 +137,6 @@ flowchart TB
         MS["Merkle State"]
         AS["Agent State"]
         SS["Social State"]
-        MMS["Meme State"]
     end
     
     subgraph Ops["State Operations"]
@@ -158,7 +155,6 @@ flowchart TB
     MS --> T
     AS --> T
     SS --> T
-    MMS --> T
     T --> V
     V --> S
     S --> R
@@ -171,7 +167,7 @@ flowchart TB
     classDef ops fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
     classDef storage fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
     
-    class MS,AS,SS,MMS,State state
+    class MS,AS,SS,State state
     class T,V,S,R,Ops ops
     class DB,C,I,Storage storage
 ```
@@ -194,7 +190,6 @@ flowchart TB
         B["Block Messages"]
         C["Consensus Messages"]
         S["Social Messages"]
-        ME["Meme Messages"]
     end
     
     subgraph Security["Security Layer"]
@@ -209,7 +204,6 @@ flowchart TB
     B --> M
     C --> M
     S --> M
-    ME --> M
     E --> T
     SI --> M
     AC --> A
@@ -220,7 +214,7 @@ flowchart TB
     classDef security fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
     
     class T,P,M,A,Protocol protocol
-    class B,C,S,ME,Messages messages
+    class B,C,S,Messages messages
     class E,SI,AC,Security security
 ```
 
@@ -240,7 +234,6 @@ flowchart TB
     subgraph Decision["Decision Making"]
         V["Voting"]
         D["Discussion"]
-        M["Meme Impact"]
     end
     
     subgraph Formation["Consensus Formation"]
@@ -254,7 +247,6 @@ flowchart TB
     I --> V
     V --> W
     D --> W
-    M --> W
     W --> AG
     AG --> F
     
@@ -264,6 +256,6 @@ flowchart TB
     classDef formation fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
     
     class R,A,I,Social social
-    class V,D,M,Decision decision
+    class V,D,Decision decision
     class W,AG,F,Formation formation
 ``` 
