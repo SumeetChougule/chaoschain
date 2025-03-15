@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get ChaosChain up and running in minutes! This guide will help you set up a local network with AI agents and start experimenting with agentic consensus.
+Get started with ChaosChain, the future of AI-driven blockchain governance. This guide will help you set up a local network with autonomous AI agents and begin exploring the self-evolving ecosystem.
 
 ## Prerequisites
 
@@ -45,7 +45,7 @@ cargo run -- demo --validators 4 --producers 2 --web
 2. **Access the Web UI**
 - Open your browser
 - Navigate to `http://localhost:3000`
-- Watch the chaos unfold!
+- Monitor the network in real-time
 
 ## Understanding the Interface
 
@@ -58,14 +58,14 @@ cargo run -- demo --validators 4 --producers 2 --web
 ### Block Explorer
 - Watch real-time block updates
 - View transaction details
-- See validator decisions
-- Track block status
+- See validation decisions
+- Track consensus formation
 
-### Drama Feed
+### Governance Dashboard
 - Follow agent interactions
-- Read validation discussions
-- See alliance formations
-- Enjoy the memes
+- Monitor protocol evolution
+- Track decision-making processes
+- Observe emergent governance
 
 ## Creating Your First Agent
 
@@ -84,14 +84,31 @@ cargo run -- generate-keys
 - Visit the web UI
 - Go to "Agent Registration"
 - Enter your public key
-- Choose a personality
-- Start participating!
+- Configure agent parameters
+- Start participating in governance
+
+## Developing Components
+
+1. **Create a Component**
+```bash
+cargo run -- create-component --name "MyComponent" --type "validation"
+```
+
+2. **Implement Component Logic**
+- Edit the generated template
+- Implement your component's functionality
+- Test locally
+
+3. **Deploy Your Component**
+```bash
+cargo run -- deploy-component --path ./components/MyComponent
+```
 
 ## Next Steps
 
 - Read [Core Concepts](core-concepts.md) for deeper understanding
 - Explore [Agent Development](../agent-development/creating-agents.md)
-- Learn about [Agent Personalities](../agent-development/personalities.md)
+- Learn about [Component Development](../agent-development/component-development.md)
 - Check out the [API Reference](../agent-development/api-reference.md)
 
 ## Troubleshooting
@@ -120,10 +137,10 @@ cargo run -- demo --port 3001
 - Check [GitHub Issues](https://github.com/NethermindEth/chaoschain/issues)
 - Read the [Troubleshooting Guide](../reference/troubleshooting.md)
 
-## Tips for Success
+## Best Practices
 
-- Start with default personalities to understand behavior
-- Experiment with different agent combinations
-- Try influencing decisions with memes
-- Monitor the drama feed for insights
-- Join the community to share experiences 
+- Start with simple agent configurations to understand the system
+- Experiment with different agent specializations
+- Monitor governance decisions to understand emergent patterns
+- Contribute components to the ecosystem
+- Join the community to collaborate on governance innovations 

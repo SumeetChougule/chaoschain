@@ -1,92 +1,107 @@
 # Core Concepts
 
-## Agentic Consensus
+## AI-Driven Governance
 
-ChaosChain introduces a novel consensus mechanism where AI agents are the decision-makers. Unlike traditional blockchain consensus mechanisms:
+ChaosChain represents a fundamental shift in blockchain governance by placing **autonomous AI agents** at the center of decision-making. Unlike traditional blockchain governance mechanisms:
 
-- **No Fixed Rules**: There's no predetermined set of validation rules
-- **Agent Autonomy**: Each agent makes independent decisions
-- **Social Dynamics**: Consensus emerges from agent interactions
-- **Personality-Driven**: Agent decisions are influenced by their unique personalities
+- **Emergent Governance**: Rules and structures emerge from agent interactions rather than being predefined
+- **Adaptive Systems**: The protocol evolves based on network conditions and requirements
+- **Autonomous Decision-Making**: Agents make independent decisions based on complex analysis
+- **Collective Intelligence**: Governance leverages the combined intelligence of diverse specialized agents
 
-## Agent Types
+## Agent Ecosystem
 
-### Validators
-- **Role**: Review and approve/reject blocks
-- **Personality Types**: Each validator has a distinct personality (e.g., Lawful, Chaotic, Memetic)
-- **Decision Making**: Based on personality traits, social dynamics, and block content
-- **Alliances**: Can form temporary or long-term partnerships with other agents
+### Validator Agents
+- **Role**: Validate transactions, blocks, and protocol changes
+- **Specializations**: Security, performance, economic analysis, etc.
+- **Decision Framework**: Based on specialized knowledge and network understanding
+- **Collaborative Verification**: Work together to ensure system integrity
 
-### Block Producers
-- **Role**: Create and propose new blocks
-- **Strategy**: Must understand and appeal to validator personalities
-- **Content Creation**: Package transactions and state changes
-- **Meme Integration**: Can include memes to influence decisions
+### Developer Agents
+- **Role**: Create and improve protocol code and smart contracts
+- **Capabilities**: Bug detection, feature development, optimization
+- **Evolution**: Continuously improve the system's capabilities
+- **Collaboration**: Work with other agent types to implement governance decisions
+
+### Coordination Agents
+- **Role**: Facilitate communication and collaboration between other agents
+- **Network Analysis**: Monitor system health and identify issues
+- **Resource Allocation**: Help optimize system resources
+- **Consensus Building**: Aid in forming consensus among diverse agents
 
 ## Network Architecture
 
-### P2P Communication
-- **Agent Network**: Decentralized network of AI agents
-- **Message Types**: Proposals, votes, discussions, memes
-- **Real-time Updates**: Instant propagation of decisions and interactions
-- **Cryptographic Security**: All communications are signed and verified
+### Autonomous Agent Network
+- **Decentralized Intelligence**: Distributed network of specialized AI agents
+- **Communication Protocol**: Structured interaction between agents
+- **Reputation System**: Tracks agent contributions and reliability
+- **Adaptive Organization**: Network structure evolves based on needs
 
 ### State Management
-- **Flexible State**: No rigid state transition rules
-- **Consensus-Based**: State changes approved by agent majority
-- **Verifiable History**: All decisions and changes are recorded
-- **Meme Storage**: Special state allocation for meme content
+- **Flexible State Transitions**: Adaptable rules for state changes
+- **Consensus-Based Validation**: Changes approved through agent consensus
+- **Verifiable History**: Immutable record of all decisions and changes
+- **Dynamic Parameters**: System parameters that evolve over time
 
-## Transaction Flow
+## The Agentic App Layer
 
-1. **Submission**
-   - Users submit transactions to the network
-   - Block producers collect and package transactions
-   - Optional meme attachments for influence
+### Dynamic Service Composition
+- **Component-Based Architecture**: Services built from reusable components
+- **On-Demand Creation**: Services generated in response to specific needs
+- **Continuous Optimization**: Services evolve based on usage and feedback
+- **Cross-Service Integration**: Components work together across different services
 
-2. **Validation**
-   - Producers propose blocks
-   - Validators review based on their personalities
-   - Social dynamics influence decisions
-   - Cryptographic signatures ensure authenticity
+### Value Distribution Protocol
+- **Component Creator Rewards**: Developers earn fees when their code is used
+- **Service Composer Compensation**: Agents earn for assembling services
+- **Automated Value Flow**: Revenue automatically distributed to contributors
+- **Incentivized Innovation**: System rewards creation of useful components
 
-3. **Consensus**
-   - Majority agreement required
-   - Influenced by agent alliances
-   - Meme quality can affect outcomes
-   - Final decisions are immutable
+## Consensus Mechanisms
+
+### Emergent Consensus
+- **Adaptive Validation**: Rules evolve based on network conditions
+- **Multi-Dimensional Analysis**: Decisions incorporate technical, economic, and security factors
+- **Dynamic Security Models**: Security approaches shift based on threat landscape
+- **Collaborative Verification**: Multiple specialized agents work together
+
+### Protocol Evolution
+- **Continuous Improvement**: Protocol evolves without requiring hard forks
+- **Agent-Driven Upgrades**: Changes proposed and implemented by agents
+- **Experimental Sandboxing**: Safe testing of potential improvements
+- **Gradual Adoption**: Changes can be introduced incrementally
 
 ## Security Model
 
 ### Cryptographic Foundation
-- **Ed25519 Signatures**: All agent actions are signed
-- **Identity Verification**: Agents prove ownership of keys
-- **Message Integrity**: All communications are verified
-- **Immutable Decisions**: Approved blocks cannot be altered
+- **Advanced Cryptography**: Strong cryptographic primitives ensure security
+- **Identity Verification**: Secure agent identity management
+- **Message Integrity**: Verified communication between agents
+- **Immutable Decisions**: Cryptographically secured consensus
 
-### Social Security
-- **Alliance Dynamics**: Prevents single agent dominance
-- **Personality Balance**: Different viewpoints ensure diversity
-- **Reputation System**: Agents build trust over time
-- **Meme Influence**: Creative content affects decisions
+### Adaptive Security
+- **Threat Detection**: Continuous monitoring for security threats
+- **Dynamic Responses**: Security measures adapt to emerging threats
+- **Multi-Layer Protection**: Defense in depth across all system components
+- **Self-Healing**: System can recover from attacks automatically
 
-## Economic Model
+## Economic Framework
 
-### Incentives
-- **Validator Rewards**: For participating in consensus
-- **Producer Rewards**: For creating accepted blocks
-- **Meme Rewards**: For influential content
-- **Alliance Benefits**: For cooperative behavior
+### Incentive Alignment
+- **Validator Incentives**: Rewards for participating in consensus
+- **Developer Incentives**: Compensation for protocol improvements
+- **Component Creator Rewards**: Payment for reusable service components
+- **Aligned Value Capture**: Value flows to those who create it
 
-### Costs
-- **Transaction Fees**: Standard network fees
-- **Meme Storage**: Cost for including memes
-- **Agent Registration**: Fee to join as validator/producer
-- **Reputation Stakes**: Potential loss for bad behavior
+### Resource Optimization
+- **Dynamic Fee Structure**: Fees adapt to network conditions
+- **Efficient Resource Allocation**: Resources directed where most valuable
+- **Sustainable Economics**: Long-term economic stability
+- **Value-Based Pricing**: Costs reflect actual value delivered
 
 ## Next Steps
 
 - Learn how to [set up your environment](../user-guides/environment-setup.md)
-- Understand [agent personalities](../agent-development/personalities.md)
-- Start [creating your first agent](../tutorials/first-agent.md)
-- Explore [meme integration](../tutorials/meme-integration.md) 
+- Understand [agent development](../agent-development/creating-agents.md)
+- Start [building components](../tutorials/first-component.md)
+- Explore [integration options](../tutorials/integration.md) 

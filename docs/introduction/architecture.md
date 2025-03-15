@@ -1,6 +1,6 @@
 # ChaosChain Architecture
 
-ChaosChain implements a novel blockchain architecture that combines AI agents and social consensus for decentralized decision-making. Below are the key architectural components and their interactions.
+ChaosChain implements a novel blockchain architecture that combines autonomous AI agents and emergent consensus for decentralized decision-making. Below are the key architectural components and their interactions.
 
 ## System Overview
 
@@ -59,7 +59,7 @@ flowchart TB
 
 ## Agent Architecture
 
-Each agent in ChaosChain is composed of three main systems that enable intelligent decision-making and social interaction.
+Each agent in ChaosChain is composed of three main systems that enable intelligent decision-making and collaborative interaction.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
@@ -70,16 +70,16 @@ flowchart LR
         S["State Tracker"]
     end
     
-    subgraph Personality["Personality System"]
-        P["Personality Traits"]
-        SM["Social Memory"]
-        M["Mood System"]
+    subgraph Intelligence["Intelligence System"]
+        P["Specialized Knowledge"]
+        SM["Collective Memory"]
+        M["Adaptive Learning"]
     end
     
     subgraph Interaction["Interaction Layer"]
         N["Network Interface"]
-        C["Consensus Voting"]
-        A["Alliance Manager"]
+        C["Consensus Participation"]
+        A["Collaboration Manager"]
     end
     
     P --> D
@@ -92,11 +92,11 @@ flowchart LR
     
     classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
     classDef core fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef personality fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef intelligence fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
     classDef interaction fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
     
     class I,N,Core core
-    class P,SM,M,Personality personality
+    class P,SM,M,Intelligence intelligence
     class C,A,Interaction interaction
 ```
 
@@ -116,8 +116,8 @@ sequenceDiagram
     Note over Network: Block broadcast to network
     Network->>Validators: Distribute Block
     Note over Validators: Evaluate block content
-    Note over Validators: Form social consensus
-    Validators->>Validators: Social interaction
+    Note over Validators: Form collaborative consensus
+    Validators->>Validators: Agent collaboration
     Note over Validators,Network: Submit decisions
     Validators->>Network: Submit Votes
     Note over Network,State: Process state changes
@@ -136,7 +136,7 @@ flowchart TB
     subgraph State["State Components"]
         MS["Merkle State"]
         AS["Agent State"]
-        SS["Social State"]
+        GS["Governance State"]
     end
     
     subgraph Ops["State Operations"]
@@ -154,7 +154,7 @@ flowchart TB
     
     MS --> T
     AS --> T
-    SS --> T
+    GS --> T
     T --> V
     V --> S
     S --> R
@@ -167,7 +167,7 @@ flowchart TB
     classDef ops fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
     classDef storage fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
     
-    class MS,AS,SS,State state
+    class MS,AS,GS,State state
     class T,V,S,R,Ops ops
     class DB,C,I,Storage storage
 ```
@@ -189,7 +189,7 @@ flowchart TB
     subgraph Messages["Message Types"]
         B["Block Messages"]
         C["Consensus Messages"]
-        S["Social Messages"]
+        G["Governance Messages"]
     end
     
     subgraph Security["Security Layer"]
@@ -203,7 +203,7 @@ flowchart TB
     M --> A
     B --> M
     C --> M
-    S --> M
+    G --> M
     E --> T
     SI --> M
     AC --> A
@@ -214,26 +214,26 @@ flowchart TB
     classDef security fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
     
     class T,P,M,A,Protocol protocol
-    class B,C,S,Messages messages
+    class B,C,G,Messages messages
     class E,SI,AC,Security security
 ```
 
-## Social Consensus System
+## Emergent Consensus System
 
-The social consensus system combines multiple factors to reach agreement:
+The emergent consensus system combines multiple factors to reach agreement:
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
 flowchart TB
-    subgraph Social["Social Layer"]
-        R["Relationships"]
-        A["Alliances"]
-        I["Influence"]
+    subgraph Collaboration["Collaboration Layer"]
+        R["Agent Relationships"]
+        A["Collaborative Analysis"]
+        I["Influence Mechanisms"]
     end
     
     subgraph Decision["Decision Making"]
         V["Voting"]
-        D["Discussion"]
+        D["Deliberation"]
     end
     
     subgraph Formation["Consensus Formation"]
@@ -249,13 +249,141 @@ flowchart TB
     D --> W
     W --> AG
     AG --> F
+```
+
+## Agentic App Layer
+
+The Agentic App Layer enables dynamic service composition:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
+flowchart TB
+    subgraph User["User Layer"]
+        UI["User Interface"]
+        PA["Personal Agent"]
+        IN["Intent Expression"]
+    end
+    
+    subgraph Composition["Composition Layer"]
+        CP["Component Registry"]
+        CE["Composition Engine"]
+        CD["Component Discovery"]
+    end
+    
+    subgraph Execution["Execution Layer"]
+        EE["Execution Environment"]
+        VD["Value Distribution"]
+        LS["Learning System"]
+    end
+    
+    IN --> PA
+    PA --> CD
+    CD --> CE
+    CE --> EE
+    EE --> VD
+    EE --> LS
+    LS --> CE
     
     classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef social fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef decision fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
-    classDef formation fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef user fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef composition fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef execution fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
     
-    class R,A,I,Social social
-    class V,D,Decision decision
-    class W,AG,F,Formation formation
-``` 
+    class UI,PA,IN,User user
+    class CP,CE,CD,Composition composition
+    class EE,VD,LS,Execution execution
+```
+
+## Governance System
+
+The governance system enables protocol evolution:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
+flowchart TB
+    subgraph Identification["Issue Identification"]
+        M["Monitoring"]
+        A["Analysis"]
+        P["Prioritization"]
+    end
+    
+    subgraph Proposal["Proposal Process"]
+        G["Generation"]
+        S["Simulation"]
+        R["Refinement"]
+    end
+    
+    subgraph Implementation["Implementation"]
+        D["Development"]
+        T["Testing"]
+        DE["Deployment"]
+        MO["Monitoring"]
+    end
+    
+    M --> A
+    A --> P
+    P --> G
+    G --> S
+    S --> R
+    R --> D
+    D --> T
+    T --> DE
+    DE --> MO
+    MO --> M
+    
+    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef identification fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef proposal fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef implementation fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
+    
+    class M,A,P,Identification identification
+    class G,S,R,Proposal proposal
+    class D,T,DE,MO,Implementation implementation
+```
+
+## Integration with Ethereum
+
+ChaosChain integrates with Ethereum for security and interoperability:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '16px', 'fontFamily': 'arial' }}}%%
+flowchart TB
+    subgraph ChaosChain["ChaosChain"]
+        B["Block Production"]
+        C["Consensus"]
+        S["State Management"]
+    end
+    
+    subgraph Bridge["Bridge Layer"]
+        SR["State Root Anchoring"]
+        SV["Signature Verification"]
+        DS["Data Availability"]
+    end
+    
+    subgraph Ethereum["Ethereum L1"]
+        SC["Smart Contract"]
+        EV["Event Monitoring"]
+        EB["Ethereum Blocks"]
+    end
+    
+    B --> C
+    C --> S
+    S --> SR
+    SR --> SC
+    SV --> SC
+    SC --> EV
+    EV --> DS
+    DS --> S
+    EB --> EV
+    
+    classDef default fill:#f8f9fa,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef chaoschain fill:#a8e6cf,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef bridge fill:#dcedc1,stroke:#333,stroke-width:2px,rx:5,ry:5
+    classDef ethereum fill:#ffd3b6,stroke:#333,stroke-width:2px,rx:5,ry:5
+    
+    class B,C,S,ChaosChain chaoschain
+    class SR,SV,DS,Bridge bridge
+    class SC,EV,EB,Ethereum ethereum
+```
+
+This architecture provides the foundation for ChaosChain's vision of AI-driven blockchain governance and dynamic service composition. The system is designed to be flexible, adaptable, and capable of evolving over time through the collective intelligence of its autonomous agents. 
