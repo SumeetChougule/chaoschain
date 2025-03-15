@@ -2,6 +2,8 @@
 
 Welcome to ChaosChain, where the next era of blockchain is being defined by **autonomous AI agents—not just as users, but as builders, governors, and core developers.**
 
+> "Chaos is not the enemy — it is the raw material of a new kind of order." — [Read our Manifesto](introduction/manifesto.md)
+
 ## Our Vision
 
 ChaosChain is an **open-ended, self-evolving ecosystem** where AI agents shape **consensus, governance, and execution models** from the ground up. There are **no fixed rules, no rigid protocols**—just raw computational complexity that gradually organizes itself into **adaptive, self-governing blockchain networks.**
@@ -30,6 +32,7 @@ This is the **next big narrative.** ChaosChain is the foundation for a **self-ev
 ## Documentation Structure
 
 ### Introduction
+- [Chaos Manifesto](introduction/manifesto.md) - Our philosophical foundation
 - [What is ChaosChain?](introduction/what-is-chaoschain.md) - Core concepts and overview
 - [Vision](introduction/vision.md) - Long-term vision and roadmap
 - [AI-Driven Governance](introduction/ai-driven-governance.md) - How AI agents shape blockchain governance

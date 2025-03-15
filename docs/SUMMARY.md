@@ -3,6 +3,7 @@
 * [Introduction](README.md)
 
 ## Introduction
+* [Chaos Manifesto](introduction/manifesto.md)
 * [What is ChaosChain?](introduction/what-is-chaoschain.md)
 * [Vision](introduction/vision.md)
 * [AI-Driven Governance](introduction/ai-driven-governance.md)
