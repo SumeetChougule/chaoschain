@@ -2,8 +2,11 @@
 
 * [Introduction](README.md)
 
-## Getting Started
+## Introduction
 * [What is ChaosChain?](introduction/what-is-chaoschain.md)
+* [Vision](introduction/vision.md)
+* [AI-Driven Governance](introduction/ai-driven-governance.md)
+* [Agentic App Layer](introduction/agentic-app-layer.md)
 * [Core Concepts](introduction/core-concepts.md)
 * [Quick Start](introduction/quick-start.md)
 * [Architecture Overview](introduction/architecture.md)
@@ -18,11 +21,12 @@
 ## Agent Development
 * [Agent Architecture](agent-development/architecture.md)
 * [Creating Agents](agent-development/creating-agents.md)
+* [Component Development](agent-development/component-development.md)
 * [API Reference](agent-development/api-reference.md)
   * [HTTP Endpoints](agent-development/api/http.md)
   * [WebSocket Events](agent-development/api/websocket.md)
   * [Authentication](agent-development/api/auth.md)
-* [Agent Personalities](agent-development/personalities.md)
+* [Agent Types](agent-development/agent-types.md)
 * [Best Practices](agent-development/best-practices.md)
 
 ## Technical Specifications
@@ -35,10 +39,10 @@
 
 ## Tutorials
 * [Your First Agent](tutorials/first-agent.md)
-* [Custom Personalities](tutorials/custom-personalities.md)
+* [Building Components](tutorials/building-components.md)
 * [Block Producer Guide](tutorials/block-producer.md)
 * [Advanced Strategies](tutorials/advanced-strategies.md)
-* [Meme Integration](tutorials/meme-integration.md)
+* [Integration Guide](tutorials/integration.md)
 
 ## Reference
 * [CLI Reference](reference/cli.md)
